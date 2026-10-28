@@ -120,7 +120,9 @@ if [[ -z "$ARCHIVE" ]]; then
     curl -fsSL "$base/$file" | tar -xJ -C /usr/local --strip-components=1
   fi
   echo "Node $(node -v)"
-  (cd "$APP_DIR/frontend" && npm ci --no-audit --no-fund --loglevel=error && npx ng build)
+  # npm install, not npm ci: the lock file comes from Windows and lacks some Linux-only
+  # optional packages, which npm ci refuses; this only touches the copy in $APP_DIR
+  (cd "$APP_DIR/frontend" && npm install --no-audit --no-fund --no-update-notifier --loglevel=error && npx ng build)
 fi
 [[ -f "$APP_DIR/frontend/dist/frontend/browser/index.html" ]] || { echo "Website build missing." >&2; exit 1; }
 
