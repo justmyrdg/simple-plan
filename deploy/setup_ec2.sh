@@ -60,13 +60,44 @@ else
   if [[ -n "$DOMAIN" ]]; then apt-get install -y -q certbot python3-certbot-nginx; fi
 fi
 
-# the AI model (and the website build) need about 2 GB of memory; give small instances swap
+free_mb() { df -Pm / | awk 'NR==2 {print $4}'; }
+disk_help() {
+  echo "Not enough disk space: $(free_mb) MB free, about $1 MB needed." >&2
+  echo "Make the disk bigger (20 GB recommended): EC2 console -> Volumes -> select the instance's volume" >&2
+  echo "-> Actions -> Modify volume -> Size 20 -> Modify. Then on the server run:" >&2
+  echo "    sudo growpart \$(findmnt -no SOURCE / | sed -E 's/p?[0-9]+\$//') 1 && sudo xfs_growfs -d /     # Amazon Linux" >&2
+  echo "    sudo growpart /dev/nvme0n1 1 && sudo resize2fs \$(findmnt -no SOURCE /)                       # Ubuntu" >&2
+  echo "and run this script again." >&2
+  exit 1
+}
+
+# the AI model needs about 2 GB of memory; give small instances 2 GB of swap
+# (not more: the default EC2 disk is only 8 GB)
+SWAP_MB=2048
 mem_mb=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
-if (( mem_mb < 3800 )) && ! swapon --show | grep -q /swapfile; then
-  step "Adding 4 GB swap (instance has ${mem_mb} MB memory)"
-  dd if=/dev/zero of=/swapfile bs=1M count=4096 status=none && chmod 600 /swapfile && mkswap -q /swapfile && swapon /swapfile
-  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+if (( mem_mb < 3800 )); then
+  swap_mb=$(( $(stat -c %s /swapfile 2>/dev/null || echo 0) / 1048576 ))
+  if (( swap_mb > SWAP_MB )); then
+    step "Shrinking swap to 2 GB to free disk space"
+    swapoff /swapfile && rm -f /swapfile && swap_mb=0
+  fi
+  if (( swap_mb == 0 )); then
+    if (( $(free_mb) < SWAP_MB + 4500 )); then
+      echo "WARNING: skipping swap, the disk is too small. With ${mem_mb} MB memory the backend may run out of memory."
+    else
+      step "Adding 2 GB swap (instance has ${mem_mb} MB memory)"
+      dd if=/dev/zero of=/swapfile bs=1M count=$SWAP_MB status=none && chmod 600 /swapfile && mkswap -q /swapfile
+    fi
+  fi
+  if [[ -f /swapfile ]]; then
+    swapon --show | grep -q /swapfile || swapon /swapfile
+    grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  fi
 fi
+
+# Amazon Linux keeps /tmp in memory (small); download and unpack big packages on disk instead
+export TMPDIR=/var/tmp/trashwatch-build
+mkdir -p "$TMPDIR"
 
 # ---------- app files ----------
 step "Copying the app into $APP_DIR"
@@ -123,17 +154,24 @@ if [[ -z "$ARCHIVE" ]]; then
   # npm install, not npm ci: the lock file comes from Windows and lacks some Linux-only
   # optional packages, which npm ci refuses; this only touches the copy in $APP_DIR
   (cd "$APP_DIR/frontend" && npm install --no-audit --no-fund --no-update-notifier --loglevel=error && npx ng build)
+  # only the built files are needed; free ~500 MB
+  rm -rf "$APP_DIR/frontend/node_modules" "$APP_DIR/frontend/.angular"
+  npm cache clean --force --loglevel=error
 fi
 [[ -f "$APP_DIR/frontend/dist/frontend/browser/index.html" ]] || { echo "Website build missing." >&2; exit 1; }
 
 # ---------- python ----------
 step "Installing Python packages (first time takes a few minutes)"
+# packages (~1.5 GB) plus the AI model download (~0.6 GB), with some room to spare
+[[ -x "$APP_DIR/venv/bin/uvicorn" ]] || (( $(free_mb) >= 3000 )) || disk_help 3000
 [[ -d "$APP_DIR/venv" ]] || $PY -m venv "$APP_DIR/venv"
-"$APP_DIR/venv/bin/pip" install -q --upgrade pip
-"$APP_DIR/venv/bin/pip" install -q torch --index-url https://download.pytorch.org/whl/cpu
+pip=("$APP_DIR/venv/bin/pip" install -q --no-cache-dir)
+"${pip[@]}" --upgrade pip
+"${pip[@]}" torch --index-url https://download.pytorch.org/whl/cpu
 # the server has no screen, so use the headless OpenCV build
-sed 's/^opencv-python$/opencv-python-headless/' "$APP_DIR/requirements.txt" > /tmp/trashwatch-requirements.txt
-"$APP_DIR/venv/bin/pip" install -q -r /tmp/trashwatch-requirements.txt
+sed 's/^opencv-python$/opencv-python-headless/' "$APP_DIR/requirements.txt" > "$TMPDIR/requirements.txt"
+"${pip[@]}" -r "$TMPDIR/requirements.txt"
+rm -rf "$TMPDIR"
 
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 chmod 600 "$APP_DIR/backend/.env"
