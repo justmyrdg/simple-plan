@@ -9,6 +9,10 @@ import { errorMessage } from '../core/api.service';
   imports: [RouterLink],
   template: `
     <main class="auth-page">
+      <section class="auth-hero">
+        <h1>Keep every<br />area clean</h1>
+        <p>Cameras watch the collection points. You see what needs pickup.</p>
+      </section>
       <form class="auth-card card" (submit)="submit($event)">
         <div class="brand brand-center">
           <div class="brand-mark"><svg class="icon"><use href="#i-trash" /></svg></div>

@@ -10,27 +10,30 @@ import { fmtAgo, fmtDay, fmtTime, fmtUntil } from '../shared/format';
   selector: 'app-public-check',
   imports: [RouterLink, AreaMap],
   template: `
-    <header class="public-bar">
-      <div class="brand">
-        <div class="brand-mark"><svg class="icon"><use href="#i-trash" /></svg></div>
-        <div>
-          <div class="brand-name">TrashWatch</div>
-          <div class="brand-sub">Garbage pickup schedule</div>
+    <div class="public-top">
+      <header class="public-bar">
+        <div class="brand">
+          <div class="brand-mark"><svg class="icon"><use href="#i-trash" /></svg></div>
+          <div>
+            <div class="brand-name">TrashWatch</div>
+            <div class="brand-sub">Garbage pickup schedule</div>
+          </div>
         </div>
-      </div>
-      <a routerLink="/login" class="btn btn-ghost"><svg class="icon"><use href="#i-key" /></svg> Admin login</a>
-    </header>
+        <a routerLink="/login" class="btn btn-ghost"><svg class="icon"><use href="#i-key" /></svg> Admin login</a>
+      </header>
 
-    <main class="public-page">
       <section class="hero">
-        <h1>When is the garbage truck coming?</h1>
-        <p>Find your area to see the next pickup and the regular collection days.</p>
+        <h1>{{ greeting }}</h1>
+        <p>Let's check when the garbage truck comes to your area.</p>
         <div class="search search-lg">
           <svg class="icon"><use href="#i-search" /></svg>
           <input class="input" placeholder="Search your street, purok or barangay" [value]="q()" (input)="q.set($any($event.target).value)"
                  aria-label="Search areas" />
         </div>
       </section>
+    </div>
+
+    <main class="public-page">
 
       @if (error()) { <div class="error">{{ error() }}</div> }
 
@@ -122,6 +125,11 @@ export class PublicCheck implements OnInit {
   private map = viewChild(AreaMap);
 
   readonly area = input<string>(); // ?area=ID so a link can be shared
+
+  protected readonly greeting = (() => {
+    const h = new Date().getHours();
+    return h < 12 ? 'Good morning!' : h < 18 ? 'Good afternoon!' : 'Good evening!';
+  })();
 
   protected areas = signal<PublicArea[]>([]);
   protected selected = signal<PublicAreaDetail | null>(null);
