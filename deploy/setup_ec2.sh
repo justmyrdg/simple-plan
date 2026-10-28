@@ -95,7 +95,7 @@ if (( mem_mb < 3800 )); then
       step "Adding 2 GB swap (instance has ${mem_mb} MB memory)"
       dd if=/dev/zero of=/swapfile bs=1M count=$SWAP_MB status=none
       chmod 600 /swapfile
-      mkswap -q /swapfile
+      mkswap /swapfile >/dev/null   # no -q: Amazon Linux's mkswap doesn't have it
       swapon /swapfile
     fi
   fi
