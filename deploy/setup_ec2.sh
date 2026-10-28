@@ -266,6 +266,7 @@ events { worker_connections 1024; }
 http {
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
+    types_hash_max_size 4096;
     access_log /var/log/nginx/access.log;
     sendfile on;
     keepalive_timeout 65;
