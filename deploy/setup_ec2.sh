@@ -45,7 +45,8 @@ else echo "Unsupported Linux: needs Amazon Linux 2023 or Ubuntu." >&2; exit 1; f
 step "Installing system packages"
 if [[ $OS == amzn ]]; then
   # the default python3 on Amazon Linux 2023 is 3.9; the app needs 3.10+
-  dnf install -y -q nginx tar gzip xz curl
+  # curl is already there as curl-minimal; asking for the full curl package conflicts with it
+  dnf install -y -q nginx tar gzip xz
   PY=""
   for v in 3.12 3.11; do
     if dnf install -y -q "python$v" "python$v-pip" 2>/dev/null; then PY="python$v"; break; fi
