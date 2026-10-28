@@ -1,0 +1,26 @@
+# Secrets and private data: never commit these
+backend/.env
+backend/.jwt_secret
+backend/*.db
+backend/*.db-journal
+backend/*.uploaded.db
+backend/captures/
+agent/agent.json
+agent/.*_state.json
+.env
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+.hf-cache/
+
+# Frontend (also listed in frontend/.gitignore)
+frontend/node_modules/
+frontend/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/

@@ -1,0 +1,296 @@
+<header class="page-head">
+  <div>
+    <h1>Monitor</h1>
+    <p class="page-sub">Watch an area live or check photos for trash.</p>
+  </div>
+  <div class="page-head-actions">
+    <nav class="segmented" aria-label="Mode">
+      <button [class.active]="mode() === 'live'" (click)="setMode('live')">
+        <svg class="icon"><use href="#i-camera" /></svg> Live
+      </button>
+      <button [class.active]="mode() === 'upload'" (click)="setMode('upload')">
+        <svg class="icon"><use href="#i-upload" /></svg> Upload
+      </button>
+    </nav>
+    @if (backendOnline() === false) {
+      <button class="chip chip-bad" (click)="checkBackend()" title="Retry connection">
+        <span class="dot"></span> Server offline · retry
+      </button>
+    } @else if (backendOnline()) {
+      <span class="chip"><span class="dot dot-ok"></span> Model: {{ modelType() }}</span>
+    } @else {
+      <span class="chip"><span class="dot"></span> Connecting…</span>
+    }
+  </div>
+</header>
+
+<div class="layout monitor-layout">
+  <!-- ===== Viewer ===== -->
+  <section class="viewer card">
+    <div class="viewer-head">
+      @if (mode() === 'live') {
+        <div class="viewer-title">
+          @if (cameraOn()) { <span class="live-badge"><span class="live-dot"></span> LIVE</span> }
+          <span>{{ areaName() ?? 'Camera feed' }}</span>
+        </div>
+        <div class="viewer-actions">
+          <select class="select" [value]="areaId() ?? ''" (change)="onArea($event)" aria-label="Area this camera watches"
+                  title="Live results are saved as this area's status">
+            @for (a of cameraAreas(); track a.id) {
+              <option [value]="a.id">{{ a.name }}{{ a.camera_label ? ' · ' + a.camera_label : '' }}</option>
+            } @empty {
+              <option value="">No camera areas</option>
+            }
+          </select>
+          @if (hasNetworkCam()) {
+            <select class="select" [value]="feed()" (change)="onFeed($event)" aria-label="Video source">
+              <option value="network">Network camera</option>
+              <option value="device">This device's camera</option>
+            </select>
+          }
+          @if (feed() === 'device' && cameras().length > 1) {
+            <select class="select" [value]="cameraId()" (change)="switchCamera($event)" aria-label="Camera">
+              @for (c of cameras(); track c.deviceId; let i = $index) {
+                <option [value]="c.deviceId">{{ c.label || 'Camera ' + (i + 1) }}</option>
+              }
+            </select>
+          }
+          @if (cameraOn()) {
+            <button class="btn" (click)="takeSnapshot()"><svg class="icon"><use href="#i-snap" /></svg> Snapshot</button>
+            <button class="btn btn-danger" (click)="stopCamera()">Stop</button>
+          } @else {
+            <button class="btn btn-primary" (click)="startCamera()"><svg class="icon"><use href="#i-camera" /></svg> Start camera</button>
+          }
+        </div>
+      } @else {
+        <div class="viewer-title"><span>{{ uploadImage() ? 'Analyzed image' : 'Upload images' }}</span></div>
+        <div class="viewer-actions">
+          @if (uploadImage()) {
+            <button class="btn" (click)="reanalyze()" title="Run again with current grid setting">
+              <svg class="icon"><use href="#i-refresh" /></svg> Re-analyze
+            </button>
+          }
+          <label class="btn btn-primary">
+            <input type="file" accept="image/*" multiple hidden (change)="onFileInput($event)" />
+            <svg class="icon"><use href="#i-upload" /></svg> {{ uploadImage() ? 'Add images' : 'Choose images' }}
+          </label>
+        </div>
+      }
+    </div>
+
+    <div class="stage" [class.stage-alert]="mode() === 'live' && alertActive()">
+      @if (mode() === 'live') {
+        @if (cameraOn()) {
+          <div class="media-wrap">
+            @if (streamUrl(); as url) {
+              <img #feedImg class="media" [src]="url" alt="Network camera feed" (error)="onFeedError()" />
+            } @else {
+              <video #video class="media" muted playsinline></video>
+            }
+            @if (showRegions() && cells(); as c) {
+              <div class="regions" [style.grid-template-columns]="'repeat(' + c.length + ', 1fr)'">
+                @for (row of c; track $index) {
+                  @for (s of row; track $index) {
+                    <div class="region" [style.background]="cellColor(s)" [class.region-hot]="s >= threshold()">
+                      <span>{{ s * 100 | number: '1.0-0' }}</span>
+                    </div>
+                  }
+                }
+              </div>
+            }
+            @if (alertActive()) {
+              <div class="stage-banner">
+                <svg class="icon"><use href="#i-alert" /></svg> Trash detected · {{ alertDuration() }}
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="placeholder">
+            <svg class="icon icon-xl"><use href="#i-camera" /></svg>
+            <p class="placeholder-title">Camera is off</p>
+            <p class="placeholder-text">
+              Start the camera to monitor the area in real time. You'll get an alert when trash stays in view.
+              @if (feed() === 'network') { The server also checks this network camera by itself, even with this page closed. }
+            </p>
+            <button class="btn btn-primary" (click)="startCamera()">Start camera</button>
+          </div>
+        }
+      } @else {
+        @if (uploadImage()) {
+          <div class="media-wrap" (drop)="onDrop($event)" (dragover)="onDragOver($event)" (dragleave)="dragging.set(false)">
+            <img class="media" [src]="uploadImage()" alt="Uploaded image" />
+            @if (showRegions() && cells(); as c) {
+              <div class="regions" [style.grid-template-columns]="'repeat(' + c.length + ', 1fr)'">
+                @for (row of c; track $index) {
+                  @for (s of row; track $index) {
+                    <div class="region" [style.background]="cellColor(s)" [class.region-hot]="s >= threshold()">
+                      <span>{{ s * 100 | number: '1.0-0' }}</span>
+                    </div>
+                  }
+                }
+              </div>
+            }
+          </div>
+        } @else {
+          <label class="dropzone" [class.dragging]="dragging()"
+                 (drop)="onDrop($event)" (dragover)="onDragOver($event)" (dragleave)="dragging.set(false)">
+            <input type="file" accept="image/*" multiple hidden (change)="onFileInput($event)" />
+            <svg class="icon icon-xl"><use href="#i-upload" /></svg>
+            <span class="placeholder-title">Drop images here, or click to choose</span>
+            <span class="placeholder-text">You can select several at once · JPG, PNG, BMP, WEBP</span>
+          </label>
+        }
+      }
+      @if (uploading() > 0) {
+        <div class="stage-loading"><span class="spinner"></span> Analyzing {{ uploading() }} image{{ uploading() > 1 ? 's' : '' }}…</div>
+      }
+    </div>
+
+    @if (error()) {
+      <div class="error" role="alert"><svg class="icon"><use href="#i-alert" /></svg> {{ error() }}</div>
+    }
+
+    @if (mode() === 'live') {
+      <div class="trend-card">
+        <div class="section-head">
+          <h3>Trash score over time</h3>
+          <span class="legend"><span class="legend-line"></span> score <span class="legend-dash"></span> threshold</span>
+        </div>
+        <app-trend-chart [points]="trend()" [threshold]="threshold()" />
+      </div>
+    }
+  </section>
+
+  <!-- ===== Side panel ===== -->
+  <aside class="side">
+    <section class="card status" [attr.data-status]="status()">
+      <div class="status-head">
+        @switch (status()) {
+          @case ('trash') { <svg class="icon icon-lg"><use href="#i-alert" /></svg> }
+          @case ('clean') { <svg class="icon icon-lg"><use href="#i-check" /></svg> }
+          @default { <svg class="icon icon-lg"><use href="#i-idle" /></svg> }
+        }
+        <div>
+          <div class="status-label">
+            @switch (status()) {
+              @case ('trash') { Full of trash }
+              @case ('clean') { Clean }
+              @default { No data yet }
+            }
+          </div>
+          <div class="status-sub">
+            @if (status() === 'idle') {
+              {{ mode() === 'live' ? 'Start the camera to begin' : 'Upload an image to analyze' }}
+            } @else if (trashyRegions() !== null) {
+              {{ trashyRegions()! | percent: '1.0-0' }} of regions look trashy
+            }
+          </div>
+        </div>
+      </div>
+      <app-score-gauge [score]="result()?.score ?? null" [threshold]="threshold()" />
+    </section>
+
+    @if (mode() === 'live') {
+      <section class="card">
+        <div class="section-head"><h3>Session</h3></div>
+        <div class="kpis">
+          <div class="kpi"><span class="kpi-value">{{ checks() }}</span><span class="kpi-label">Checks</span></div>
+          <div class="kpi"><span class="kpi-value">{{ stats() ? (stats()!.trashTime | percent: '1.0-0') : '–' }}</span><span class="kpi-label">Time trashy</span></div>
+          <div class="kpi"><span class="kpi-value">{{ stats() ? (stats()!.peak | percent: '1.0-0') : '–' }}</span><span class="kpi-label">Peak score</span></div>
+          <div class="kpi"><span class="kpi-value">{{ latency() !== null ? latency() + ' ms' : '–' }}</span><span class="kpi-label">Response time</span></div>
+        </div>
+      </section>
+    }
+
+    <section class="card">
+      <div class="section-head"><h3>Settings</h3></div>
+      <div class="settings">
+        <label class="field">
+          <span class="field-row">Sensitivity threshold <strong>{{ threshold() | percent: '1.0-0' }}</strong></span>
+          <input type="range" min="0.1" max="0.9" step="0.05" [value]="threshold()" (input)="onThreshold($event)" />
+          <span class="field-hint">Lower flags trash more easily</span>
+        </label>
+        <label class="field">
+          <span class="field-row">Region grid</span>
+          <select class="select" [value]="grid()" (change)="onGrid($event)">
+            <option value="0">Off</option>
+            <option value="2">2 × 2</option>
+            <option value="3">3 × 3</option>
+            <option value="4">4 × 4</option>
+          </select>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" [checked]="showRegions()" (change)="showRegions.set(!showRegions())" />
+          <span>Show region overlay</span>
+        </label>
+        @if (mode() === 'live') {
+          <label class="field">
+            <span class="field-row">Check every</span>
+            <select class="select" [value]="intervalMs()" (change)="onInterval($event)">
+              <option value="250">0.25 s (fastest)</option>
+              <option value="1000">1 s</option>
+              <option value="3000">3 s</option>
+              <option value="10000">10 s</option>
+              <option value="30000">30 s</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field-row">Alert after</span>
+            <select class="select" [value]="alertAfter()" (change)="onAlertAfter($event)">
+              <option value="1">1 trashy check</option>
+              <option value="3">3 trashy checks in a row</option>
+              <option value="5">5 trashy checks in a row</option>
+              <option value="10">10 trashy checks in a row</option>
+            </select>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" [checked]="soundOn()" (change)="soundOn.set(!soundOn())" />
+            <span>Beep on alert</span>
+          </label>
+        }
+      </div>
+    </section>
+  </aside>
+
+  <!-- ===== Event log ===== -->
+  <section class="card log">
+    <div class="section-head">
+      <h3>{{ mode() === 'live' ? 'Event log' : 'Analyzed images' }} <span class="count">{{ visibleLog().length }}</span></h3>
+      @if (visibleLog().length) {
+        <button class="btn btn-ghost" (click)="clearLog()">Clear</button>
+      }
+    </div>
+    @if (visibleLog().length) {
+      <ul class="log-list">
+        @for (e of visibleLog(); track e.id) {
+          <li class="log-item" [attr.data-kind]="e.kind" [class.selected]="e.id === selectedId()"
+              [class.clickable]="e.source === 'upload'" (click)="openEntry(e)">
+            @if (e.thumb) { <img class="log-thumb" [src]="e.thumb" alt="" /> }
+            <div class="log-body">
+              <div class="log-title">
+                @switch (e.kind) {
+                  @case ('trash') { <svg class="icon"><use href="#i-alert" /></svg> }
+                  @case ('clean') { <svg class="icon"><use href="#i-check" /></svg> }
+                  @default { <svg class="icon"><use href="#i-snap" /></svg> }
+                }
+                <span class="ellipsis">{{ e.title }}</span>
+              </div>
+              <div class="log-meta">
+                <span class="tag" [attr.data-kind]="e.score >= threshold() ? 'trash' : 'clean'">
+                  {{ e.score >= threshold() ? 'Trash' : 'Clean' }} {{ e.score | percent: '1.0-0' }}
+                </span>
+                <span>{{ time(e.time) }}</span>
+              </div>
+            </div>
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="empty">
+        {{ mode() === 'live'
+          ? 'Alerts and snapshots will appear here while the camera is running.'
+          : 'Images you upload will be listed here. Click one to view it again.' }}
+      </p>
+    }
+  </section>
+</div>

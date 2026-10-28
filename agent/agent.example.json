@@ -1,0 +1,18 @@
+{
+  "server": "http://localhost:8000",
+  "username": "admin",
+  "password": "admin123",
+  "interval_seconds": 30,
+  "threshold": 0.5,
+  "grid": 3,
+  "cameras": [
+    {
+      "name": "Test Area camera",
+      "area_id": 1,
+      "mac": "84:94:59:c3:df:54",
+      "username": "admin",
+      "password": "CAMERA PASSWORD HERE",
+      "path": "/Streaming/Channels/101"
+    }
+  ]
+}

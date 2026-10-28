@@ -1,0 +1,13 @@
+torch
+transformers
+pillow
+opencv-python
+numpy
+# backend
+fastapi
+uvicorn[standard]
+python-multipart
+SQLAlchemy>=2.0
+PyJWT
+bcrypt
+requests
