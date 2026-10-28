@@ -17,7 +17,7 @@
 param(
   [Parameter(Mandatory = $true)] [string] $Server,      # EC2 public IP or DNS name
   [Parameter(Mandatory = $true)] [string] $Key,         # the .pem key pair file from AWS
-  [string] $User = "ubuntu",                            # default user on Ubuntu AMIs
+  [string] $User = "ubuntu",                            # Ubuntu AMIs; use -User ec2-user on Amazon Linux
   [string] $Domain = "",
   [string] $Email = "",
   [switch] $IncludeDatabase,
@@ -68,7 +68,7 @@ try {
   Check "Upload (check the IP, the key file, and that port 22 is open in the security group)"
 
   Step "Setting up the server"
-  $remote = "sed -i 's/\r$//' /tmp/setup_ec2.sh && sudo bash /tmp/setup_ec2.sh /tmp/trashwatch.tar.gz '$Domain' '$Email'"
+  $remote = "sed -i 's/\r$//' /tmp/setup_ec2.sh && sudo bash /tmp/setup_ec2.sh --archive /tmp/trashwatch.tar.gz '$Domain' '$Email'"
   & ssh @sshOpts -t $target $remote
   Check "Server setup"
 }

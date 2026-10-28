@@ -16,7 +16,7 @@ In the AWS console, go to **EC2 → Launch instance**:
 
 | Setting | Value |
 |---|---|
-| AMI | **Ubuntu Server 24.04 LTS** |
+| AMI | **Amazon Linux 2023** or **Ubuntu Server 24.04 LTS** (both work) |
 | Instance type | **t3.medium** (4 GB memory) recommended. A `t3.small` works; the script adds swap, but it's slower. |
 | Key pair | Create one and download the `.pem` file, e.g. `C:\keys\trashwatch.pem` |
 | Storage | **20 GB** |
@@ -33,7 +33,40 @@ icacls C:\keys\trashwatch.pem /inheritance:r /grant:r "$($env:USERNAME):R"
 
 ## 2. Deploy
 
-From the project folder in PowerShell:
+There are two ways. Use one.
+
+### Option A: clone from GitHub on the server
+
+Connect to the server (EC2 console → **Connect**, or `ssh -i C:\keys\trashwatch.pem ec2-user@<elastic IP>`), then:
+
+```bash
+sudo dnf install -y git            # Ubuntu: sudo apt install -y git
+git clone https://github.com/<you>/<repo>.git
+cd <repo>
+sudo bash deploy/setup_ec2.sh
+```
+
+For a private repository, `git clone` asks for your GitHub username and a
+**personal access token** (GitHub → Settings → Developer settings → Personal access tokens)
+instead of your password.
+
+The first run takes about 10–15 minutes: it builds the website, installs PyTorch and downloads the AI model.
+At the end it prints the website address and the **admin password**. Save it, then change it after logging in.
+
+To update after pushing new code:
+
+```bash
+cd <repo> && git pull && sudo bash deploy/setup_ec2.sh
+```
+
+Your database isn't in GitHub. To copy this laptop's areas and contacts to a new server, upload it
+**before the first run**:
+`scp -i C:\keys\trashwatch.pem backend\trashwatch.db ec2-user@<elastic IP>:~/<repo>/backend/trashwatch.uploaded.db`,
+then run `sudo bash deploy/setup_ec2.sh`. It's only used if the server has no database yet.
+
+### Option B: upload from Windows with deploy.ps1
+
+From the project folder in PowerShell (on Amazon Linux add `-User ec2-user`):
 
 ```powershell
 .\deploy\deploy.ps1 -Server <elastic IP> -Key C:\keys\trashwatch.pem
