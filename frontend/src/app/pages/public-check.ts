@@ -110,6 +110,12 @@ import { fmtAgo, fmtDay, fmtTime, fmtUntil } from '../shared/format';
                   Camera: {{ s.status === 'trash' ? 'trash is piling up' : 'area is clean' }} · {{ ago(s.status_checked_at) }}
                 </p>
               }
+              @if (s.last_collected_at) {
+                <p class="cam-status" data-kind="clean">
+                  <svg class="icon icon-sm"><use href="#i-truck" /></svg>
+                  Last collected: {{ day(s.last_collected_at) }} · {{ time(s.last_collected_at) }}
+                </p>
+              }
             </section>
           } @else if (areas().length) {
             <p class="empty">Select an area from the list or the map.</p>
@@ -117,6 +123,11 @@ import { fmtAgo, fmtDay, fmtTime, fmtUntil } from '../shared/format';
         </div>
       </div>
     </main>
+
+    <footer class="public-foot">
+      <a routerLink="/privacy"><svg class="icon icon-sm"><use href="#i-shield" /></svg> Privacy notice</a>
+      <a routerLink="/stop"><svg class="icon icon-sm"><use href="#i-x" /></svg> Stop SMS reminders</a>
+    </footer>
   `,
 })
 export class PublicCheck implements OnInit {

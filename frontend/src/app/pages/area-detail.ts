@@ -2,12 +2,15 @@ import { Component, OnInit, computed, inject, input, signal } from '@angular/cor
 import { Router, RouterLink } from '@angular/router';
 import { PercentPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ApiService, Area, Contact, Schedule, ScheduleInput, SmsEntry, WEEKDAYS, errorMessage } from '../core/api.service';
+import {
+  ApiService, Area, Collection, Contact, LANGUAGE_LABEL, Schedule, ScheduleInput, SmsEntry, SmsLanguage, WEEKDAYS, errorMessage,
+} from '../core/api.service';
 import { AreaForm } from '../shared/area-form';
+import { CollectionList } from '../shared/collection-list';
 import { AreaMap, MapMarker } from '../shared/area-map';
-import { fmtAgo, fmtDateTime } from '../shared/format';
+import { fmtAgo, fmtDate, fmtDateTime } from '../shared/format';
 
-type Tab = 'contacts' | 'schedule' | 'messages';
+type Tab = 'contacts' | 'schedule' | 'collections' | 'messages';
 
 const EMPTY_SCHEDULE: ScheduleInput = {
   kind: 'weekly', weekday: 0, date: null, time: '07:00', truck: '', notes: '', notify_minutes_before: 60, active: true,
@@ -15,7 +18,7 @@ const EMPTY_SCHEDULE: ScheduleInput = {
 
 @Component({
   selector: 'app-area-detail',
-  imports: [RouterLink, PercentPipe, AreaForm, AreaMap],
+  imports: [RouterLink, PercentPipe, AreaForm, AreaMap, CollectionList],
   template: `
     <header class="page-head">
       <div>
@@ -52,13 +55,15 @@ const EMPTY_SCHEDULE: ScheduleInput = {
             </div>
           </div>
           <div class="card mini-stat"><span class="kpi-value">{{ contacts().length }}</span><span class="kpi-label">Contacts ({{ activeContacts() }} active)</span></div>
-          <div class="card mini-stat"><span class="kpi-value small-value">{{ a.next_pickup ? dateTime(a.next_pickup) : 'None' }}</span><span class="kpi-label">Next pickup</span></div>
+          <div class="card mini-stat"><span class="kpi-value small-value">{{ a.next_pickup ? dateTime(a.next_pickup) : 'None' }}</span><span class="kpi-label">Next pickup</span>
+            <span class="kpi-label">Last collected: {{ a.last_collected_at ? dateTime(a.last_collected_at) : 'not yet' }}</span></div>
           <div class="card card-flush mini-map"><app-area-map class="map-sm" [markers]="marker()" /></div>
         </section>
 
         <nav class="tabs-line">
           <button [class.active]="tab() === 'contacts'" (click)="tab.set('contacts')"><svg class="icon"><use href="#i-users" /></svg> Contacts</button>
           <button [class.active]="tab() === 'schedule'" (click)="tab.set('schedule')"><svg class="icon"><use href="#i-calendar" /></svg> Pickup schedule</button>
+          <button [class.active]="tab() === 'collections'" (click)="tab.set('collections'); loadCollections()"><svg class="icon"><use href="#i-truck" /></svg> Collections</button>
           <button [class.active]="tab() === 'messages'" (click)="tab.set('messages'); loadSms()"><svg class="icon"><use href="#i-message" /></svg> Messages</button>
         </nav>
 
@@ -68,35 +73,55 @@ const EMPTY_SCHEDULE: ScheduleInput = {
             <form class="inline-form" (submit)="addContact($event)">
               <label class="field"><span>Name</span><input class="input" name="name" required maxlength="120" placeholder="Juan Dela Cruz" /></label>
               <label class="field"><span>Mobile number</span><input class="input" name="phone" required inputmode="tel" placeholder="09171234567" /></label>
+              <label class="field field-narrow"><span>SMS language</span>
+                <select class="input" name="language">
+                  <option value="en">English</option>
+                  <option value="fil">Filipino</option>
+                </select></label>
               <button class="btn btn-primary" [disabled]="busy()"><svg class="icon"><use href="#i-plus" /></svg> Add contact</button>
+              <label class="toggle consent">
+                <input type="checkbox" name="consent" required />
+                <span>The resident agreed to receive SMS pickup reminders and to have their name and number stored for this purpose.</span>
+              </label>
             </form>
             @if (contactError()) { <div class="error">{{ contactError() }}</div> }
             @if (flash()) { <div class="success">{{ flash() }}</div> }
 
             <div class="table-wrap">
               <table class="table">
-                <thead><tr><th>Name</th><th>Mobile</th><th>Reminders</th><th class="actions-col"></th></tr></thead>
+                <thead><tr><th>Name</th><th>Mobile</th><th>Language</th><th>Reminders</th><th class="actions-col"></th></tr></thead>
                 <tbody>
                   @for (c of contacts(); track c.id) {
                     @if (editingId() === c.id) {
                       <tr class="row-edit">
                         <td><input class="input" [value]="c.name" #en /></td>
                         <td><input class="input" [value]="c.phone" #ep inputmode="tel" /></td>
+                        <td><select class="input" #el [value]="c.language">
+                          <option value="en">English</option><option value="fil">Filipino</option></select></td>
                         <td><label class="toggle"><input type="checkbox" [checked]="c.active" #ea /><span>On</span></label></td>
                         <td class="actions">
-                          <button class="btn btn-primary btn-sm" (click)="saveContact(c, en.value, ep.value, ea.checked)">Save</button>
+                          <button class="btn btn-primary btn-sm" (click)="saveContact(c, en.value, ep.value, ea.checked, $any(el.value))">Save</button>
                           <button class="btn btn-sm" (click)="editingId.set(null)">Cancel</button>
                         </td>
                       </tr>
                     } @else {
                       <tr [class.row-muted]="!c.active">
-                        <td class="cell-title">{{ c.name }}</td>
-                        <td class="mono">{{ c.phone }}</td>
                         <td>
-                          <button class="switch" [class.on]="c.active" (click)="toggleContact(c)" [attr.aria-pressed]="c.active"
-                                  [attr.aria-label]="'SMS reminders for ' + c.name">
-                            <span></span>
-                          </button>
+                          <span class="cell-title">{{ c.name }}</span>
+                          <span class="cell-sub">{{ c.consent_at ? 'Consent ' + date(c.consent_at) : 'No consent recorded' }}</span>
+                        </td>
+                        <td class="mono">{{ c.phone }}</td>
+                        <td>{{ languageLabel[c.language] }}</td>
+                        <td>
+                          @if (c.opted_out_at && !c.active) {
+                            <button class="tag tag-btn" data-kind="opted_out" (click)="toggleContact(c)"
+                                    [title]="'Opted out ' + date(c.opted_out_at) + '. Click if they asked to receive SMS again.'">Opted out</button>
+                          } @else {
+                            <button class="switch" [class.on]="c.active" (click)="toggleContact(c)" [attr.aria-pressed]="c.active"
+                                    [attr.aria-label]="'SMS reminders for ' + c.name">
+                              <span></span>
+                            </button>
+                          }
                         </td>
                         <td class="actions">
                           <button class="icon-btn" title="Send test SMS" (click)="testContact(c)"><svg class="icon"><use href="#i-send" /></svg></button>
@@ -106,7 +131,7 @@ const EMPTY_SCHEDULE: ScheduleInput = {
                       </tr>
                     }
                   } @empty {
-                    <tr><td colspan="4" class="empty-cell">No contacts yet. Residents added here get an SMS before each pickup.</td></tr>
+                    <tr><td colspan="5" class="empty-cell">No contacts yet. Residents added here get an SMS before each pickup.</td></tr>
                   }
                 </tbody>
               </table>
@@ -142,6 +167,20 @@ const EMPTY_SCHEDULE: ScheduleInput = {
                 <li class="empty">No pickups yet. Add a weekly pickup day or a one-time pickup.</li>
               }
             </ul>
+          </section>
+        }
+
+        <!-- ===== Collections ===== -->
+        @if (tab() === 'collections') {
+          <section class="card">
+            <div class="section-head">
+              <h3>Collections · last 30 days</h3>
+              <button class="btn" (click)="loadCollections()"><svg class="icon"><use href="#i-refresh" /></svg> Refresh</button>
+            </div>
+            <p class="muted small">For each scheduled pickup the camera checks whether the area went from full to clean
+              between 2 hours before and 4 hours after the scheduled time. Photos are taken when the status changes.</p>
+            <app-collection-list [items]="collections()" [showArea]="false"
+                                 empty="No pickups judged yet. Add a pickup schedule; each pickup is checked once its time window starts." />
           </section>
         }
 
@@ -242,6 +281,7 @@ export class AreaDetail implements OnInit {
   protected contacts = signal<Contact[]>([]);
   protected schedules = signal<Schedule[]>([]);
   protected sms = signal<SmsEntry[]>([]);
+  protected collections = signal<Collection[]>([]);
   protected tab = signal<Tab>('contacts');
   protected error = signal<string | null>(null);
   protected contactError = signal<string | null>(null);
@@ -296,7 +336,11 @@ export class AreaDetail implements OnInit {
     const data = new FormData(form);
     this.busy.set(true);
     this.contactError.set(null);
-    this.api.createContact(this.areaId, { name: String(data.get('name')), phone: String(data.get('phone')), active: true }).subscribe({
+    const contact = {
+      name: String(data.get('name')), phone: String(data.get('phone')), active: true,
+      language: (data.get('language') as SmsLanguage) ?? 'en', consent: data.get('consent') === 'on',
+    };
+    this.api.createContact(this.areaId, contact).subscribe({
       next: (c) => {
         this.busy.set(false);
         form.reset();
@@ -310,9 +354,9 @@ export class AreaDetail implements OnInit {
     });
   }
 
-  protected saveContact(c: Contact, name: string, phone: string, active: boolean) {
+  protected saveContact(c: Contact, name: string, phone: string, active: boolean, language = c.language, consent = false) {
     this.contactError.set(null);
-    this.api.updateContact(c.id, { name, phone, active }).subscribe({
+    this.api.updateContact(c.id, { name, phone, active, language, consent }).subscribe({
       next: (u) => {
         this.contacts.update((list) => list.map((x) => (x.id === u.id ? u : x)));
         this.editingId.set(null);
@@ -322,6 +366,12 @@ export class AreaDetail implements OnInit {
   }
 
   protected toggleContact(c: Contact) {
+    // an opted-out resident may only be turned back on if they asked again (new consent)
+    if (!c.active && c.opted_out_at) {
+      if (!confirm(`${c.name} opted out of SMS. Turn reminders back on only if they asked to receive them again.\n\nDid they agree again?`)) return;
+      this.saveContact(c, c.name, c.phone, true, c.language, true);
+      return;
+    }
     this.saveContact(c, c.name, c.phone, !c.active);
   }
 
@@ -403,6 +453,12 @@ export class AreaDetail implements OnInit {
     return `${min} min before`;
   }
 
+  // ---- collections ----
+
+  protected loadCollections() {
+    this.api.collections(this.areaId).subscribe((c) => this.collections.set(c));
+  }
+
   // ---- messages ----
 
   protected loadSms() {
@@ -443,4 +499,6 @@ export class AreaDetail implements OnInit {
 
   protected ago = fmtAgo;
   protected dateTime = fmtDateTime;
+  protected date = fmtDate;
+  protected languageLabel = LANGUAGE_LABEL;
 }

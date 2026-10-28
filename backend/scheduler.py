@@ -1,4 +1,9 @@
-"""Background loop that texts each area's contacts before a scheduled pickup."""
+"""
+Background loop, every minute:
+  - texts each area's contacts before a scheduled pickup (in each contact's language)
+  - judges scheduled pickups from the camera history (collection_tracker)
+  - deletes camera photos older than PHOTO_RETENTION_DAYS (Data Privacy Act: keep only what's needed)
+"""
 
 import asyncio
 from datetime import datetime, timedelta
@@ -6,21 +11,13 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .collection_tracker import cleanup_photos, update_collections
 from .db import SessionLocal
 from .models import Contact, Schedule, SmsLog
-from .pickups import fmt_time, occurrences
-from .sms import send_sms
+from .pickups import occurrences
+from .sms import reminder_text, send_sms
 
 CHECK_EVERY_SECONDS = 60
-
-
-def reminder_text(area_name: str, pickup: datetime, s: Schedule, now: datetime) -> str:
-    day = "today" if pickup.date() == now.date() else pickup.strftime("%a %b %d")
-    msg = f"TrashWatch: Garbage truck pickup at {area_name} {day} at {fmt_time(pickup.strftime('%H:%M'))}."
-    msg += " Please bring out your trash."
-    if s.truck:
-        msg += f" Truck: {s.truck}."
-    return msg
 
 
 def send_due_reminders(db: Session, now: datetime | None = None) -> int:
@@ -48,10 +45,10 @@ def send_due_reminders(db: Session, now: datetime | None = None) -> int:
                     )
                 ).all()
             )
-            text = reminder_text(s.area.name, pickup, s, now)
             for c in contacts:
                 if c.phone in already:
                     continue
+                text = reminder_text(c.language, s.area.name, pickup, now, s.truck, s.notes)
                 status, error = send_sms(c.phone, text)
                 db.add(SmsLog(
                     area_id=s.area_id, contact_id=c.id, schedule_id=s.id, occurrence=occurrence,
@@ -64,15 +61,20 @@ def send_due_reminders(db: Session, now: datetime | None = None) -> int:
 
 def _tick():
     with SessionLocal() as db:
-        return send_due_reminders(db)
+        sent = send_due_reminders(db)
+        decided = update_collections(db)
+        cleanup_photos(db)
+        return sent, decided
 
 
 async def reminder_loop():
     while True:
         try:
-            n = await asyncio.to_thread(_tick)
-            if n:
-                print(f"[scheduler] sent {n} pickup reminder(s)")
+            sent, decided = await asyncio.to_thread(_tick)
+            if sent:
+                print(f"[scheduler] sent {sent} pickup reminder(s)")
+            for line in decided:
+                print(f"[collection] {line}")
         except Exception as e:  # keep the loop alive no matter what
             print(f"[scheduler] error: {e!r}")
         await asyncio.sleep(CHECK_EVERY_SECONDS)

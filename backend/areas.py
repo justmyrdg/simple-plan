@@ -13,7 +13,7 @@ from .auth import current_user
 from .db import get_db
 from .models import Area, Contact, Detection, Schedule, SmsLog
 from .pickups import describe, upcoming
-from .sms import InvalidPhone, normalize_phone, send_sms
+from .sms import LANGUAGES, InvalidPhone, normalize_phone, send_sms, test_text
 
 router = APIRouter(prefix="/api", tags=["admin"], dependencies=[Depends(current_user)])
 
@@ -44,6 +44,7 @@ class AreaOut(AreaIn):
     last_status: str | None
     last_score: float | None
     last_checked_at: datetime | None
+    last_collected_at: datetime | None = None
     contact_count: int = 0
     schedule_count: int = 0
     next_pickup: datetime | None = None
@@ -53,6 +54,16 @@ class ContactIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     phone: str
     active: bool = True
+    language: str = "en"
+    # the resident agreed to receive SMS (Data Privacy Act); required to add them or to resume after an opt-out
+    consent: bool = False
+
+    @field_validator("language")
+    @classmethod
+    def _language(cls, v: str) -> str:
+        if v not in LANGUAGES:
+            raise ValueError("language must be 'en' (English) or 'fil' (Filipino)")
+        return v
 
     @field_validator("phone")
     @classmethod
@@ -70,6 +81,9 @@ class ContactOut(BaseModel):
     name: str
     phone: str
     active: bool
+    language: str
+    consent_at: datetime | None
+    opted_out_at: datetime | None
     created_at: datetime
 
 
@@ -201,7 +215,9 @@ def list_contacts(area_id: int, db: Session = Depends(get_db)):
 @router.post("/areas/{area_id}/contacts", response_model=ContactOut, status_code=201)
 def create_contact(area_id: int, body: ContactIn, db: Session = Depends(get_db)):
     _area_or_404(db, area_id)
-    contact = Contact(area_id=area_id, **body.model_dump())
+    if not body.consent:
+        raise HTTPException(400, "Confirm that the resident agreed to receive SMS reminders")
+    contact = Contact(area_id=area_id, consent_at=datetime.now(), **body.model_dump(exclude={"consent"}))
     db.add(contact)
     _commit_contact(db)
     return contact
@@ -212,8 +228,13 @@ def update_contact(contact_id: int, body: ContactIn, db: Session = Depends(get_d
     contact = db.get(Contact, contact_id)
     if contact is None:
         raise HTTPException(404, "Contact not found")
-    for k, v in body.model_dump().items():
+    if body.active and contact.opted_out_at and not body.consent:
+        raise HTTPException(400, "This resident opted out. Turn reminders back on only if they asked again, "
+                                 "and confirm their consent.")
+    for k, v in body.model_dump(exclude={"consent"}).items():
         setattr(contact, k, v)
+    if body.consent:
+        contact.consent_at, contact.opted_out_at = datetime.now(), None
     _commit_contact(db)
     return contact
 
@@ -223,6 +244,10 @@ def delete_contact(contact_id: int, db: Session = Depends(get_db)):
     contact = db.get(Contact, contact_id)
     if contact is None:
         raise HTTPException(404, "Contact not found")
+    # erase the person but keep the counts for reports: mask their number and name in the SMS log
+    masked = contact.phone[:2] + "•••••" + contact.phone[-4:]
+    for log in db.scalars(select(SmsLog).where(SmsLog.contact_id == contact.id)).all():
+        log.phone, log.message = masked, log.message.replace(contact.name, "resident")
     db.delete(contact)
     db.commit()
 
@@ -232,7 +257,7 @@ def test_contact(contact_id: int, db: Session = Depends(get_db)):
     contact = db.get(Contact, contact_id)
     if contact is None:
         raise HTTPException(404, "Contact not found")
-    text = f"TrashWatch: Hi {contact.name}, this is a test message. You'll get pickup reminders for {contact.area.name}."
+    text = test_text(contact.language, contact.name, contact.area.name)
     status, error = send_sms(contact.phone, text)
     db.add(SmsLog(area_id=contact.area_id, contact_id=contact.id, phone=contact.phone,
                   message=text, status=status, error=error, kind="manual"))

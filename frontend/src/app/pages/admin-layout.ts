@@ -26,6 +26,7 @@ import { errorMessage } from '../core/api.service';
           <a routerLink="/admin/dashboard" routerLinkActive="active"><svg class="icon"><use href="#i-grid" /></svg> Dashboard</a>
           <a routerLink="/admin/monitor" routerLinkActive="active"><svg class="icon"><use href="#i-camera" /></svg> Monitor</a>
           <a routerLink="/admin/areas" routerLinkActive="active"><svg class="icon"><use href="#i-pin" /></svg> Areas &amp; contacts</a>
+          <a routerLink="/admin/reports" routerLinkActive="active"><svg class="icon"><use href="#i-chart" /></svg> Reports</a>
           <a routerLink="/admin/sms" routerLinkActive="active"><svg class="icon"><use href="#i-message" /></svg> SMS log</a>
           <a routerLink="/" class="nav-secondary"><svg class="icon"><use href="#i-calendar" /></svg> Public schedule page</a>
         </nav>

@@ -17,6 +17,11 @@ export function fmtDay(v: string | Date, now = new Date()): string {
   return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+/** "Oct 28, 2026" */
+export function fmtDate(v: string | Date): string {
+  return toDate(v).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 export function fmtDateTime(v: string | Date): string {
   return `${fmtDay(v)} · ${fmtTime(v)}`;
 }

@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ApiService, SmsEntry, errorMessage } from '../core/api.service';
 import { fmtDateTime } from '../shared/format';
 
-type Filter = 'all' | 'reminder' | 'manual' | 'failed';
+type Filter = 'all' | 'reminder' | 'manual' | 'alert' | 'failed';
 
 @Component({
   selector: 'app-sms-log',
@@ -11,7 +11,7 @@ type Filter = 'all' | 'reminder' | 'manual' | 'failed';
     <header class="page-head">
       <div>
         <h1>SMS log</h1>
-        <p class="page-sub">Every pickup reminder and manual message, newest first.</p>
+        <p class="page-sub">Every pickup reminder, manual message and admin alert, newest first.</p>
       </div>
       <div class="page-head-actions">
         <nav class="segmented">
@@ -34,7 +34,7 @@ type Filter = 'all' | 'reminder' | 'manual' | 'failed';
                   <td class="nowrap">{{ dateTime(m.time) }}</td>
                   <td>{{ m.area ?? '—' }}</td>
                   <td class="mono">{{ m.phone }}</td>
-                  <td>{{ m.kind === 'reminder' ? 'Reminder' : 'Manual' }}</td>
+                  <td>{{ kindLabel[m.kind] }}</td>
                   <td class="msg">{{ m.message }} @if (m.error) { <span class="cell-sub err">{{ m.error }}</span> }</td>
                   <td><span class="tag" [attr.data-kind]="m.status">{{ m.status }}</span></td>
                 </tr>
@@ -57,8 +57,10 @@ export class SmsLogPage implements OnInit {
     { id: 'all', label: 'All' },
     { id: 'reminder', label: 'Reminders' },
     { id: 'manual', label: 'Manual' },
+    { id: 'alert', label: 'Admin alerts' },
     { id: 'failed', label: 'Failed' },
   ];
+  protected kindLabel: Record<SmsEntry['kind'], string> = { reminder: 'Reminder', manual: 'Manual', alert: 'Admin alert' };
 
   protected shown = computed(() => {
     const f = this.filter();

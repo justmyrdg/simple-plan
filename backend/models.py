@@ -37,6 +37,8 @@ class Area(Base):
     last_status: Mapped[str | None] = mapped_column(String(16), nullable=True)  # 'trash' | 'clean'
     last_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # set by collection_tracker when a scheduled pickup is confirmed collected
+    last_collected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
@@ -54,6 +56,10 @@ class Contact(Base):
     name: Mapped[str] = mapped_column(String(120))
     phone: Mapped[str] = mapped_column(String(20))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    language: Mapped[str] = mapped_column(String(3), default="en")  # 'en' | 'fil' (Filipino)
+    # Data Privacy Act (RA 10173): when the resident agreed to receive SMS
+    consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    opted_out_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     area: Mapped[Area] = relationship(back_populates="contacts")
@@ -94,7 +100,36 @@ class Detection(Base):
     status: Mapped[str] = mapped_column(String(16))
     score: Mapped[float] = mapped_column(Float)
     source: Mapped[str] = mapped_column(String(16), default="live")  # 'live' | 'upload'
+    # camera frame saved when the status changed (proof for collections), in backend/captures/
+    photo: Mapped[str] = mapped_column(String(64), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)
+
+
+class Collection(Base):
+    """
+    What happened at one scheduled pickup, judged from the camera history around it:
+    'pending'   window still open, nothing decided yet
+    'collected' the area went from full to clean in the window
+    'missed'    the area was still full when the window closed
+    'no_waste'  the area was never full in the window (nothing to collect)
+    'no_data'   the camera wasn't reporting, so it can't be judged
+    """
+
+    __tablename__ = "collections"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    area_id: Mapped[int] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"), index=True)
+    schedule_id: Mapped[int | None] = mapped_column(ForeignKey("schedules.id", ondelete="SET NULL"), nullable=True)
+    scheduled_for: Mapped[datetime] = mapped_column(DateTime, index=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    full_since: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    collected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    before_detection_id: Mapped[int | None] = mapped_column(ForeignKey("detections.id", ondelete="SET NULL"), nullable=True)
+    after_detection_id: Mapped[int | None] = mapped_column(ForeignKey("detections.id", ondelete="SET NULL"), nullable=True)
+    alerted: Mapped[bool] = mapped_column(Boolean, default=False)  # admin SMS sent for a miss
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    __table_args__ = (UniqueConstraint("area_id", "scheduled_for", name="uq_collection_area_time"),)
 
 
 class SmsLog(Base):
@@ -111,5 +146,5 @@ class SmsLog(Base):
     message: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16))  # 'sent' | 'simulated' | 'failed'
     error: Mapped[str] = mapped_column(Text, default="")
-    kind: Mapped[str] = mapped_column(String(16), default="reminder")  # 'reminder' | 'manual'
+    kind: Mapped[str] = mapped_column(String(16), default="reminder")  # 'reminder' | 'manual' | 'alert' (to admins)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)

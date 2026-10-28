@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .auth import current_user
+from .collection_tracker import list_collections
 from .db import get_db
 from .models import Area, Contact, Detection, SmsLog
 from .pickups import upcoming
@@ -45,6 +46,8 @@ def dashboard(db: Session = Depends(get_db)):
             "trash": sum(1 for st in in_bucket if st == "trash"),
         })
 
+    today_collections = list_collections(db, today, today + timedelta(days=1))
+
     sms_today = db.execute(
         select(SmsLog.status, func.count()).where(SmsLog.created_at >= today).group_by(SmsLog.status)
     ).all()
@@ -61,7 +64,12 @@ def dashboard(db: Session = Depends(get_db)):
             "contacts": db.scalar(select(func.count()).select_from(Contact)) or 0,
             "pickups_today": sum(1 for dt, _, _ in pickups if dt.date() == now.date()),
             "sms_today": {status: n for status, n in sms_today},
+            "collections_today": {
+                status: sum(1 for c in today_collections if c["status"] == status)
+                for status in ("collected", "missed", "pending", "no_waste", "no_data")
+            },
         },
+        "recent_collections": list_collections(db, now - timedelta(days=7), now)[:10],
         "areas": [
             {
                 "id": a.id, "name": a.name, "lat": a.lat, "lng": a.lng,

@@ -12,6 +12,9 @@ own camera/location.
 
 Usage:
     python trash_detector.py train Images/      # labels from clean_*/dirty_* names or clean/ trash/ subfolders
+    python trash_detector.py evaluate TestImages/ --save results/   # accuracy, precision, recall, F1 on a test set
+    python trash_detector.py capture rtsp://user:pass@192.168.254.130/Streaming/Channels/101 --every 300
+                                                # save a site photo every 5 min (for building a dataset)
     python trash_detector.py image path/to/photo.jpg
     python trash_detector.py folder path/to/images/
     python trash_detector.py webcam            # press q to quit, s to save a snapshot
@@ -293,6 +296,115 @@ def run_train(detector, folder, head_path, val_split=0.2):
     print(f"Saved trained head to {head_path}")
 
 
+def _metrics(labels, preds):
+    tp = sum(1 for y, p in zip(labels, preds) if y == 1 and p == 1)
+    tn = sum(1 for y, p in zip(labels, preds) if y == 0 and p == 0)
+    fp = sum(1 for y, p in zip(labels, preds) if y == 0 and p == 1)
+    fn = sum(1 for y, p in zip(labels, preds) if y == 1 and p == 0)
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    recall = tp / (tp + fn) if tp + fn else 0.0
+    return {
+        "tp": tp, "tn": tn, "fp": fp, "fn": fn,
+        "accuracy": (tp + tn) / len(labels),
+        "precision": precision,
+        "recall": recall,
+        "specificity": tn / (tn + fp) if tn + fp else 0.0,
+        "f1": 2 * precision * recall / (precision + recall) if precision + recall else 0.0,
+    }
+
+
+def run_evaluate(detector, folder, threshold, save_dir=None):
+    """
+    Accuracy on a labeled test set (clean/ and trash/ subfolders, or clean_* / dirty_* names).
+    Use photos that were NOT used for training, ideally from the real collection points.
+    """
+    import csv
+
+    root = Path(folder)
+    paths, labels = [], []
+    for p in sorted(root.rglob("*")):
+        if p.suffix.lower() in IMAGE_EXTS and (lab := label_for(p, root)) is not None:
+            paths.append(p)
+            labels.append(lab)
+    if not paths:
+        sys.exit(f"No labeled images in {root} (put them in clean/ and trash/ subfolders)")
+    print(f"Evaluating {len(paths)} images: {sum(labels)} trash, {len(labels) - sum(labels)} clean")
+
+    trained, zero_shot = [], []
+    with torch.no_grad():
+        for i in range(0, len(paths), 32):  # in chunks so big test sets fit in memory
+            feats = detector.embed([Image.open(p).convert("RGB") for p in paths[i:i + 32]])
+            if detector.head is not None:
+                trained += torch.sigmoid(detector.head(feats)).squeeze(-1).cpu().tolist()
+            logits = detector.model.logit_scale.exp() * feats @ detector.text_feats.T
+            zero_shot += logits.softmax(dim=-1)[:, : detector.n_trash].sum(dim=-1).cpu().tolist()
+
+    results = {"zero-shot": zero_shot}
+    if trained:
+        results = {"trained head": trained, **results}
+    print(f"\nThreshold {threshold:.2f}, 'trash' is the positive class\n")
+    print(f"{'model':<14}{'accuracy':>10}{'precision':>11}{'recall':>8}{'specificity':>13}{'F1':>7}")
+    for name, scores in results.items():
+        m = _metrics(labels, [int(s >= threshold) for s in scores])
+        print(f"{name:<14}{m['accuracy']:>10.1%}{m['precision']:>11.1%}{m['recall']:>8.1%}{m['specificity']:>13.1%}{m['f1']:>7.3f}")
+    main_name, main_scores = next(iter(results.items()))
+    m = _metrics(labels, [int(s >= threshold) for s in main_scores])
+    print(f"\nConfusion matrix ({main_name}):")
+    print(f"{'':>18}{'predicted trash':>17}{'predicted clean':>17}")
+    print(f"{'actual trash':>18}{m['tp']:>17}{m['fn']:>17}")
+    print(f"{'actual clean':>18}{m['fp']:>17}{m['tn']:>17}")
+    wrong = [(p, y, s) for p, y, s in zip(paths, labels, main_scores) if int(s >= threshold) != y]
+    if wrong:
+        print(f"\nMisclassified ({len(wrong)}):")
+        for p, y, s in wrong:
+            print(f"  {p.relative_to(root)}  actual {'trash' if y else 'clean'}, score {s:.2f}")
+
+    if save_dir:
+        save_dir.mkdir(parents=True, exist_ok=True)
+        out = save_dir / "evaluation.csv"
+        with out.open("w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["file", "actual", *[f"{n} score" for n in results], *[f"{n} correct" for n in results]])
+            for i, (p, y) in enumerate(zip(paths, labels)):
+                scores = [results[n][i] for n in results]
+                w.writerow([str(p.relative_to(root)), "trash" if y else "clean", *[f"{s:.4f}" for s in scores],
+                            *[int(s >= threshold) == y for s in scores]])
+        print(f"\nPer-image results written to {out}")
+
+
+def run_capture(source, every, out_dir, count=0):
+    """Save a frame from a camera every `every` seconds, to collect photos of a real site for training/testing."""
+    import os
+    import time
+    from datetime import datetime
+
+    os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    src = int(source) if str(source).isdigit() else source
+    saved = 0
+    print(f"Saving a frame every {every:g} s to {out_dir} (Ctrl+C to stop)")
+    try:
+        while not count or saved < count:
+            if isinstance(src, int):
+                cap = cv2.VideoCapture(src)
+            else:  # don't hang for minutes when the camera is unreachable
+                cap = cv2.VideoCapture(src, cv2.CAP_FFMPEG, [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 8000,
+                                                             cv2.CAP_PROP_READ_TIMEOUT_MSEC, 8000])
+            ok, frame = cap.read() if cap.isOpened() else (False, None)
+            cap.release()
+            if ok:
+                name = out_dir / f"{datetime.now():%Y%m%d_%H%M%S}.jpg"
+                cv2.imwrite(str(name), frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+                saved += 1
+                print(f"  {name.name}")
+            else:
+                print("  could not read a frame; retrying")
+            time.sleep(every)
+    except KeyboardInterrupt:
+        pass
+    print(f"Saved {saved} frame(s). Sort them into clean/ and trash/ folders to train or evaluate.")
+
+
 def fit_to_screen(img, max_side=1000):
     h, w = img.shape[:2]
     scale = min(1.0, max_side / max(h, w))
@@ -301,8 +413,8 @@ def fit_to_screen(img, max_side=1000):
 
 def main():
     ap = argparse.ArgumentParser(description="Detect whether an area is full of trash.")
-    ap.add_argument("mode", choices=["train", "image", "folder", "webcam"])
-    ap.add_argument("path", nargs="?", help="image file or folder (not needed for webcam)")
+    ap.add_argument("mode", choices=["train", "evaluate", "capture", "image", "folder", "webcam"])
+    ap.add_argument("path", nargs="?", help="image file or folder (not needed for webcam); for capture: camera URL or number")
     ap.add_argument("--head", type=Path, default=DEFAULT_HEAD, help="trained head file to save/load")
     ap.add_argument("--zero-shot", action="store_true", help="ignore the trained head, use text prompts")
     ap.add_argument("--threshold", type=float, default=0.5)
@@ -310,6 +422,9 @@ def main():
     ap.add_argument("--camera", type=int, default=0)
     ap.add_argument("--save", type=Path, help="folder to save annotated results")
     ap.add_argument("--no-show", action="store_true", help="don't open a preview window")
+    ap.add_argument("--every", type=float, default=60, help="capture: seconds between frames")
+    ap.add_argument("--count", type=int, default=0, help="capture: stop after this many frames (0 = until Ctrl+C)")
+    ap.add_argument("--out", type=Path, default=Path("Images") / "captured", help="capture: folder for the frames")
     args = ap.parse_args()
 
     if args.mode != "webcam" and not args.path:
@@ -317,6 +432,13 @@ def main():
 
     if args.mode == "train":
         run_train(TrashDetector(), args.path, args.head)
+        return
+    if args.mode == "capture":
+        run_capture(args.path, args.every, args.out, args.count)
+        return
+    if args.mode == "evaluate":
+        head = None if args.zero_shot else args.head
+        run_evaluate(TrashDetector(head_path=head), args.path, args.threshold, args.save)
         return
 
     head = None if args.zero_shot else args.head

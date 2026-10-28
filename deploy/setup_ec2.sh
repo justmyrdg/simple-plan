@@ -60,6 +60,11 @@ else
   if [[ -n "$DOMAIN" ]]; then apt-get install -y -q certbot python3-certbot-nginx; fi
 fi
 
+# pickup times are local times; EC2 runs on UTC by default, which would send reminders 8 hours late
+TIMEZONE="${TIMEZONE:-Asia/Manila}"
+step "Setting the time zone to $TIMEZONE"
+timedatectl set-timezone "$TIMEZONE"
+
 free_mb() { df -Pm / | awk 'NR==2 {print $4}'; }
 disk_help() {
   echo "Not enough disk space: $(free_mb) MB free, about $1 MB needed." >&2
@@ -199,6 +204,7 @@ Wants=network-online.target
 User=$APP_USER
 WorkingDirectory=$APP_DIR
 Environment=HF_HOME=$APP_DIR/.hf-cache
+Environment=TZ=$TIMEZONE
 # one worker only: the model is loaded once and the SMS reminder loop must not run twice
 ExecStart=$APP_DIR/venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --proxy-headers
 Restart=always

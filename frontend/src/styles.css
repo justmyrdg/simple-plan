@@ -345,5 +345,10 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .tag[data-kind="trash"], .tag[data-kind="failed"] { background: var(--bad-soft); color: var(--bad); }
 .tag[data-kind="clean"], .tag[data-kind="sent"] { background: var(--good-soft); color: var(--good); }
 .tag[data-kind="idle"], .tag[data-kind="simulated"] { background: var(--idle-soft); color: var(--text-2); }
+.tag[data-kind="collected"] { background: var(--good-soft); color: var(--good); }
+.tag[data-kind="missed"], .tag[data-kind="opted_out"] { background: var(--bad-soft); color: var(--bad); }
+.tag[data-kind="pending"] { background: var(--accent-soft); color: var(--accent); }
+.tag[data-kind="no_waste"], .tag[data-kind="no_data"] { background: var(--idle-soft); color: var(--text-2); }
+.tag-btn { border: 0; font-family: inherit; cursor: pointer; }
 .tag-info { background: var(--accent-soft); color: var(--accent); }
 .empty { margin: 0; padding: 18px; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: 16px; }

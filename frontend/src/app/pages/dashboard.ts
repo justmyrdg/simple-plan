@@ -5,13 +5,14 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ApiService, Dashboard, errorMessage } from '../core/api.service';
 import { AreaMap, MapMarker } from '../shared/area-map';
 import { ActivityChart } from '../shared/activity-chart';
+import { CollectionList } from '../shared/collection-list';
 import { fmtAgo, fmtDateTime, fmtTime, fmtUntil } from '../shared/format';
 
 const REFRESH_MS = 15000;
 
 @Component({
   selector: 'app-dashboard',
-  imports: [RouterLink, PercentPipe, AreaMap, ActivityChart],
+  imports: [RouterLink, PercentPipe, AreaMap, ActivityChart, CollectionList],
   template: `
     <header class="page-head">
       <div>
@@ -29,7 +30,8 @@ const REFRESH_MS = 15000;
       @if (d()?.sms_provider === 'simulated') {
         <div class="notice">
           <svg class="icon"><use href="#i-message" /></svg>
-          SMS is in <strong>simulation mode</strong>: messages are logged but not sent. Add <code>SEMAPHORE_API_KEY</code> to <code>backend/.env</code> to send real texts.
+          SMS is in <strong>simulation mode</strong>: messages are logged but not sent. Set up the free Android SMS gateway
+          (<code>SMSGATE_USERNAME</code> / <code>SMSGATE_PASSWORD</code>) or <code>SEMAPHORE_API_KEY</code> in <code>backend/.env</code> to send real texts.
         </div>
       }
 
@@ -55,6 +57,11 @@ const REFRESH_MS = 15000;
           <div class="kpi-tile">
             <span class="kpi-icon"><svg class="icon"><use href="#i-truck" /></svg></span>
             <span class="kpi-value">{{ d.totals.pickups_today }}</span><span class="kpi-label">Pickups today</span>
+          </div>
+          <div class="kpi-tile" [class.kpi-bad]="d.totals.collections_today.missed > 0">
+            <span class="kpi-icon"><svg class="icon"><use href="#i-check" /></svg></span>
+            <span class="kpi-value">{{ d.totals.collections_today.collected }}</span>
+            <span class="kpi-label">Collected today{{ d.totals.collections_today.missed ? ' · ' + d.totals.collections_today.missed + ' missed' : '' }}</span>
           </div>
           <div class="kpi-tile">
             <span class="kpi-icon"><svg class="icon"><use href="#i-message" /></svg></span>
@@ -132,6 +139,12 @@ const REFRESH_MS = 15000;
                 <li class="empty">No pickups scheduled. Add a schedule from an area's page.</li>
               }
             </ul>
+          </div>
+
+          <div class="card dash-wide">
+            <div class="section-head"><h3>Recent collections · last 7 days</h3><a class="link" routerLink="/admin/reports">Full report</a></div>
+            <app-collection-list [items]="d.recent_collections"
+                                 empty="No pickups judged yet. Each scheduled pickup is checked against the camera once its time window starts." />
           </div>
 
           <div class="card dash-wide">
