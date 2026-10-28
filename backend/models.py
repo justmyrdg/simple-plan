@@ -84,6 +84,8 @@ class Schedule(Base):
     truck: Mapped[str] = mapped_column(String(120), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
     notify_minutes_before: Mapped[int] = mapped_column(Integer, default=60)
+    # also text residents at the pickup time itself, not only before it
+    notify_at_pickup: Mapped[bool] = mapped_column(Boolean, default=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
@@ -146,5 +148,6 @@ class SmsLog(Base):
     message: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16))  # 'sent' | 'simulated' | 'failed'
     error: Mapped[str] = mapped_column(Text, default="")
-    kind: Mapped[str] = mapped_column(String(16), default="reminder")  # 'reminder' | 'manual' | 'alert' (to admins)
+    # 'reminder' (before pickup) | 'at_pickup' (at pickup time) | 'manual' | 'alert' (to admins)
+    kind: Mapped[str] = mapped_column(String(16), default="reminder")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)

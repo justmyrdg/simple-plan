@@ -1,6 +1,8 @@
 # SMS Setup
 
-TrashWatch texts residents before each scheduled pickup, in **English or Filipino** (set per resident),
+TrashWatch texts residents before each scheduled pickup **and again at the pickup time itself**
+(switch the second one off per schedule with "Also text residents at the pickup time"),
+in **English or Filipino** (set per resident),
 and texts admins when a pickup was **not collected**. Without any provider configured, SMS is
 **simulated**: messages are only logged on the SMS log page.
 
@@ -61,7 +63,12 @@ date        # should show PST
 
 ## Message examples
 
-English:
+At pickup time (English / Filipino):
+> TrashWatch: It's garbage pickup time at Purok 1 (8:00 AM). Please bring out your trash now if you haven't yet.
+
+> TrashWatch: Oras na ng pagkuha ng basura sa Purok 1 (8:00 AM). Pakilabas na po ang inyong basura kung hindi pa.
+
+Reminder before the pickup, English:
 > TrashWatch: Garbage truck pickup at Purok 1 today at 8:00 AM. Please bring out your trash. Truck: Truck 3. Biodegradable only. To stop: https://your-site/stop
 
 Filipino:

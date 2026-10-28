@@ -148,6 +148,23 @@ def reminder_text(lang: str, area: str, pickup: datetime, now: datetime, truck: 
     return msg + _stop_hint(lang)
 
 
+def at_pickup_text(lang: str, area: str, pickup: datetime, truck: str = "", notes: str = "") -> str:
+    """Sent at the scheduled pickup time itself."""
+    if lang == "fil":
+        msg = (f"TrashWatch: Oras na ng pagkuha ng basura sa {area} ({_time(pickup)}). "
+               f"Pakilabas na po ang inyong basura kung hindi pa.")
+        if truck:
+            msg += f" Trak: {truck}."
+    else:
+        msg = (f"TrashWatch: It's garbage pickup time at {area} ({_time(pickup)}). "
+               f"Please bring out your trash now if you haven't yet.")
+        if truck:
+            msg += f" Truck: {truck}."
+    if notes:
+        msg += f" {notes}"
+    return msg + _stop_hint(lang)
+
+
 def test_text(lang: str, name: str, area: str) -> str:
     if lang == "fil":
         return (f"TrashWatch: Kumusta {name}, ito ay test na mensahe. Makakatanggap ka ng paalala "

@@ -13,7 +13,7 @@ import { fmtAgo, fmtDate, fmtDateTime } from '../shared/format';
 type Tab = 'contacts' | 'schedule' | 'collections' | 'messages';
 
 const EMPTY_SCHEDULE: ScheduleInput = {
-  kind: 'weekly', weekday: 0, date: null, time: '07:00', truck: '', notes: '', notify_minutes_before: 60, active: true,
+  kind: 'weekly', weekday: 0, date: null, time: '07:00', truck: '', notes: '', notify_minutes_before: 60, notify_at_pickup: true, active: true,
 };
 
 @Component({
@@ -153,7 +153,7 @@ const EMPTY_SCHEDULE: ScheduleInput = {
                   <div class="sched-main">
                     <strong>{{ s.description }}</strong>
                     <span class="muted small">
-                      {{ s.truck || 'Garbage truck' }} · SMS {{ reminderLabel(s.notify_minutes_before) }}
+                      {{ s.truck || 'Garbage truck' }} · SMS {{ reminderLabel(s.notify_minutes_before) }}{{ s.notify_at_pickup ? ' + at pickup time' : '' }}
                       @if (!s.active) { · <em>paused</em> }
                     </span>
                     @if (s.notes) { <span class="small">{{ s.notes }}</span> }
@@ -258,6 +258,8 @@ const EMPTY_SCHEDULE: ScheduleInput = {
               <option value="720">12 hours before</option>
               <option value="1440">1 day before</option>
             </select></label>
+          <label class="toggle"><input type="checkbox" [checked]="sf().notify_at_pickup" (change)="setS('notify_at_pickup', $any($event.target).checked)" />
+            <span>Also text residents at the pickup time</span></label>
           <label class="field"><span>Notes (shown to residents)</span>
             <input class="input" [value]="sf().notes" (input)="setS('notes', $any($event.target).value)" placeholder="e.g. Biodegradable only" /></label>
           <label class="toggle"><input type="checkbox" [checked]="sf().active" (change)="setS('active', $any($event.target).checked)" /><span>Active</span></label>

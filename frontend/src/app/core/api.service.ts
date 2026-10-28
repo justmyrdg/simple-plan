@@ -88,6 +88,7 @@ export interface Schedule {
   truck: string;
   notes: string;
   notify_minutes_before: number;
+  notify_at_pickup: boolean; // also text residents at the pickup time itself
   active: boolean;
   description: string;
 }
@@ -101,7 +102,7 @@ export interface SmsEntry {
   message: string;
   status: 'sent' | 'simulated' | 'failed';
   error: string;
-  kind: 'reminder' | 'manual' | 'alert';
+  kind: 'reminder' | 'at_pickup' | 'manual' | 'alert';
 }
 
 export interface Dashboard {

@@ -95,6 +95,7 @@ class ScheduleIn(BaseModel):
     truck: str = ""
     notes: str = ""
     notify_minutes_before: int = Field(default=60, ge=0, le=60 * 48)
+    notify_at_pickup: bool = True
     active: bool = True
 
     @model_validator(mode="after")

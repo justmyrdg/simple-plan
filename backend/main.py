@@ -76,6 +76,9 @@ ADDED_COLUMNS = {
     "detections": {
         "photo": "VARCHAR(64) NOT NULL DEFAULT ''",
     },
+    "schedules": {
+        "notify_at_pickup": "BOOLEAN NOT NULL DEFAULT 1",
+    },
 }
 
 

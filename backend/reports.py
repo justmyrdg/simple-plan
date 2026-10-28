@@ -64,7 +64,7 @@ def build_report(db: Session, days: int) -> dict:
     areas = db.scalars(select(Area).order_by(Area.name)).all()
     sms = db.execute(
         select(SmsLog.area_id, SmsLog.status, func.count()).where(
-            SmsLog.kind == "reminder", SmsLog.created_at >= since
+            SmsLog.kind.in_(("reminder", "at_pickup")), SmsLog.created_at >= since
         ).group_by(SmsLog.area_id, SmsLog.status)
     ).all()
 

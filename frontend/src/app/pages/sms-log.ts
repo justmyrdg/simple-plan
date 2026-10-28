@@ -60,11 +60,15 @@ export class SmsLogPage implements OnInit {
     { id: 'alert', label: 'Admin alerts' },
     { id: 'failed', label: 'Failed' },
   ];
-  protected kindLabel: Record<SmsEntry['kind'], string> = { reminder: 'Reminder', manual: 'Manual', alert: 'Admin alert' };
+  protected kindLabel: Record<SmsEntry['kind'], string> = {
+    reminder: 'Reminder', at_pickup: 'At pickup time', manual: 'Manual', alert: 'Admin alert',
+  };
 
   protected shown = computed(() => {
     const f = this.filter();
-    return this.rows().filter((m) => f === 'all' || (f === 'failed' ? m.status === 'failed' : m.kind === f));
+    return this.rows().filter(
+      (m) => f === 'all' || (f === 'failed' ? m.status === 'failed' : f === 'reminder' ? m.kind === 'reminder' || m.kind === 'at_pickup' : m.kind === f),
+    );
   });
 
   ngOnInit() {
