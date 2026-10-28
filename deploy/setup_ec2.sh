@@ -75,23 +75,34 @@ disk_help() {
 # (not more: the default EC2 disk is only 8 GB)
 SWAP_MB=2048
 mem_mb=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+swap_active() { swapon --show=NAME --noheadings | grep -qx /swapfile; }
 if (( mem_mb < 3800 )); then
+  # a swap file left half-made by an interrupted run can't be turned on: start over
+  if [[ -f /swapfile ]] && ! swap_active && ! swapon /swapfile 2>/dev/null; then
+    rm -f /swapfile
+  fi
   swap_mb=$(( $(stat -c %s /swapfile 2>/dev/null || echo 0) / 1048576 ))
   if (( swap_mb > SWAP_MB )); then
     step "Shrinking swap to 2 GB to free disk space"
-    swapoff /swapfile && rm -f /swapfile && swap_mb=0
+    swapoff /swapfile 2>/dev/null || true
+    rm -f /swapfile
+    swap_mb=0
   fi
   if (( swap_mb == 0 )); then
     if (( $(free_mb) < SWAP_MB + 4500 )); then
       echo "WARNING: skipping swap, the disk is too small. With ${mem_mb} MB memory the backend may run out of memory."
     else
       step "Adding 2 GB swap (instance has ${mem_mb} MB memory)"
-      dd if=/dev/zero of=/swapfile bs=1M count=$SWAP_MB status=none && chmod 600 /swapfile && mkswap -q /swapfile
+      dd if=/dev/zero of=/swapfile bs=1M count=$SWAP_MB status=none
+      chmod 600 /swapfile
+      mkswap -q /swapfile
+      swapon /swapfile
     fi
   fi
   if [[ -f /swapfile ]]; then
-    swapon --show | grep -q /swapfile || swapon /swapfile
     grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  else
+    sed -i '\|^/swapfile |d' /etc/fstab   # don't leave a boot entry for a file that's gone
   fi
 fi
 
