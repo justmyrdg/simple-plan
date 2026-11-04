@@ -23,6 +23,7 @@ Settings (optional) go in backend/.env as KEY=value lines:
 
 import asyncio
 import base64
+import json
 import os
 import sys
 import threading
@@ -82,6 +83,10 @@ ADDED_COLUMNS = {
     },
     "schedules": {
         "notify_at_pickup": "BOOLEAN NOT NULL DEFAULT 1",
+    },
+    "recording_results": {
+        "cells": "TEXT NOT NULL DEFAULT ''",
+        "threshold": "FLOAT NOT NULL DEFAULT 0.5",
     },
 }
 
@@ -296,9 +301,12 @@ async def recording_result_loop():
                 bgr = await asyncio.to_thread(cameras.grab_frame, area)
                 result, _ = await asyncio.to_thread(run_detector, bgr, CAMERA_THRESHOLD, 3)
                 with SessionLocal() as db:
+                    cells = result["cells"]
                     db.add(RecordingResult(recording_id=recording_id, offset=round(offset, 1),
                                            status="trash" if result["is_trash"] else "clean",
-                                           score=round(float(result["score"]), 4)))
+                                           score=round(float(result["score"]), 4),
+                                           cells=json.dumps(cells.astype(float).round(3).tolist()) if cells is not None else "",
+                                           threshold=CAMERA_THRESHOLD))
                     db.commit()
             except cameras.CameraError:
                 pass  # the recording itself reports a dead camera; just skip this sample

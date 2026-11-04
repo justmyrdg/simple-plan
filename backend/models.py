@@ -147,6 +147,8 @@ class RecordingResult(Base):
     offset: Mapped[float] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(16))  # 'trash' | 'clean'
     score: Mapped[float] = mapped_column(Float)
+    cells: Mapped[str] = mapped_column(Text, default="")  # JSON grid of per-region scores, "" when the grid was off
+    threshold: Mapped[float] = mapped_column(Float, default=0.5)  # the trash threshold the verdict and shading used
 
 
 class Collection(Base):

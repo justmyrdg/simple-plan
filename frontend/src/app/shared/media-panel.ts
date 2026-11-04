@@ -73,29 +73,47 @@ import { fmtDateTime } from './format';
             </div>
             @if (playing() === r.id) {
               <div class="mp-player">
-                <video #vid class="mp-video" controls autoplay playsinline [src]="fileUrl('recordings', r.id)"
-                       (timeupdate)="videoTime.set(vid.currentTime)"></video>
-                @if (nowResult(); as res) {
-                  <span class="mp-verdict" [attr.data-kind]="res.status">
-                    {{ res.status === 'trash' ? 'FULL OF TRASH' : 'CLEAN' }} · {{ percent(res.score) }}
-                  </span>
+                <div class="mp-stage">
+                  <video #vid class="mp-video" controls autoplay playsinline [src]="fileUrl('recordings', r.id)"
+                         (timeupdate)="videoTime.set(vid.currentTime)"></video>
+                  @if (nowResult(); as res) {
+                    @if (showRegions() && res.cells; as c) {
+                      <div class="regions" [style.grid-template-columns]="'repeat(' + c.length + ', 1fr)'">
+                        @for (row of c; track $index) {
+                          @for (s of row; track $index) {
+                            <div class="region" [style.background]="cellColor(s, res.threshold)" [class.region-hot]="s >= res.threshold">
+                              <span>{{ percentNumber(s) }}</span>
+                            </div>
+                          }
+                        }
+                      </div>
+                    }
+                    <span class="mp-verdict" [attr.data-kind]="res.status">
+                      {{ res.status === 'trash' ? 'FULL OF TRASH' : 'CLEAN' }} · {{ percent(res.score) }}
+                    </span>
+                  }
+                </div>
+                @if (segments(r.seconds).length) {
+                  <div class="mp-timeline" title="Detector result along the video. Click to jump." (click)="seek($event, vid, r.seconds)">
+                    @for (s of segments(r.seconds); track s.left) {
+                      <span class="mp-seg" [attr.data-kind]="s.status" [style.left.%]="s.left" [style.width.%]="s.width"></span>
+                    }
+                    <span class="mp-playhead" [style.left.%]="playhead(r.seconds)"></span>
+                  </div>
+                  <div class="muted small mp-legend">
+                    <span class="tag" data-kind="trash">Full of trash {{ trashShare() }}%</span>
+                    <span class="tag" data-kind="clean">Clean {{ 100 - trashShare() }}%</span>
+                    of the video
+                    <label class="toggle">
+                      <input type="checkbox" [checked]="showRegions()" (change)="showRegions.set(!showRegions())" />
+                      <span>Show region overlay</span>
+                    </label>
+                  </div>
+                } @else {
+                  <p class="muted small">No detector results were noted for this video.</p>
                 }
               </div>
-              @if (segments(r.seconds).length) {
-                <div class="mp-timeline" title="Detector result along the video. Click to jump." (click)="seek($event, vid, r.seconds)">
-                  @for (s of segments(r.seconds); track s.left) {
-                    <span class="mp-seg" [attr.data-kind]="s.status" [style.left.%]="s.left" [style.width.%]="s.width"></span>
-                  }
-                  <span class="mp-playhead" [style.left.%]="playhead(r.seconds)"></span>
-                </div>
-                <div class="muted small mp-legend">
-                  <span class="tag" data-kind="trash">Full of trash {{ trashShare() }}%</span>
-                  <span class="tag" data-kind="clean">Clean {{ 100 - trashShare() }}%</span>
-                  of the video (checked about every few seconds)
-                </div>
-              } @else {
-                <p class="muted small">No detector results were noted for this video.</p>
-              }
+              <p class="muted small">The label and regions are drawn over the player; the saved and downloaded video file is unchanged.</p>
             }
           </li>
         } @empty {
@@ -145,6 +163,7 @@ export class MediaPanel implements OnDestroy {
   // detector verdicts along the video being played, and where the player is now
   protected results = signal<RecordingResultItem[]>([]);
   protected videoTime = signal(0);
+  protected showRegions = signal(true);
   protected nowResult = computed(() => {
     const t = this.videoTime();
     const list = this.results();
@@ -221,8 +240,19 @@ export class MediaPanel implements OnDestroy {
     video.currentTime = (total * (e.clientX - bar.getBoundingClientRect().left)) / bar.clientWidth;
   }
 
+  // same shading as the live Monitor view: only regions past the threshold, stronger the more confident
+  protected cellColor(score: number, threshold: number) {
+    if (score < threshold) return 'transparent';
+    const a = 0.18 + 0.32 * ((score - threshold) / Math.max(1 - threshold, 0.01));
+    return `rgba(225, 45, 35, ${a.toFixed(2)})`;
+  }
+
   protected percent(score: number) {
-    return `${Math.round(score * 100)}%`;
+    return `${this.percentNumber(score)}%`;
+  }
+
+  protected percentNumber(score: number) {
+    return Math.round(score * 100);
   }
 
   ngOnDestroy() {

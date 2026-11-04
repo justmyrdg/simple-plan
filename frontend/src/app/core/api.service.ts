@@ -79,6 +79,8 @@ export interface RecordingResultItem {
   t: number;
   status: 'trash' | 'clean';
   score: number;
+  threshold: number; // the trash threshold the verdict and the shading were made with
+  cells: number[][] | null; // per-region scores, null when the grid was off
 }
 export interface RecordingList {
   items: RecordingItem[];

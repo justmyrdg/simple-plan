@@ -37,12 +37,22 @@ Pick one route:
 - [ ] Forward nothing else (not 80, 443, 8000 or the Hikvision SDK port).
 - [ ] If the router supports it, restrict the rule to the EC2 Elastic IP as the only allowed source. This is the most important protection.
 
+Example for a router whose port-forward table has Remote IP and Interface columns (the camera is `192.168.8.100`, the WAN interface is `nas0_1`). One rule only:
+
+| Local IP | Local Port | Protocol | Remote IP | Remote Port | Interface |
+|---|---|---|---|---|---|
+| 192.168.8.100 | 554 | TCP | EC2 Elastic IP | 554 (or the high port you chose) | nas0_1 |
+
+Do not add rules for the camera's web page (80) or the Hikvision SDK port (8000): the app doesn't use them, and each one is another way in.
+
 ### 5. Test from EC2
 ```bash
 ssh ubuntu@<ec2>
 ffprobe -rtsp_transport tcp "rtsp://admin:<password>@<ddns-host>:38554/Streaming/Channels/101"
 ```
-It should print video stream info. If it hangs, recheck the forward, the source filter, and CGNAT.
+Keep `-rtsp_transport tcp`: without it ffprobe tries UDP first, which a single TCP forward can't carry, and the test can hang even when the forward is right. It should print video stream info. If it hangs, recheck the forward, the source filter, and CGNAT.
+
+Also test from your own computer (not EC2): the same command should now fail, which shows the source filter works.
 
 ### 6. Point the app at it
 - [ ] Log in to the site, go to **Areas**, edit the area.

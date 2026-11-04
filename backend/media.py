@@ -9,6 +9,7 @@ Camera media an admin saves by hand, and how long all camera media is kept.
 Admins can also delete any of them at any time. Files live in storage.py (disk, or S3).
 """
 
+import json
 import os
 from datetime import datetime, timedelta
 
@@ -145,7 +146,8 @@ def recording_results(recording_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Recording not found")
     rows = db.scalars(select(RecordingResult).where(RecordingResult.recording_id == recording_id)
                       .order_by(RecordingResult.offset)).all()
-    return [{"t": r.offset, "status": r.status, "score": r.score} for r in rows]
+    return [{"t": r.offset, "status": r.status, "score": r.score, "threshold": r.threshold,
+             "cells": json.loads(r.cells) if r.cells else None} for r in rows]
 
 
 @router.delete("/recordings/{recording_id}", status_code=204, dependencies=[Depends(current_user)])
