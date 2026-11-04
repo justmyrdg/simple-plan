@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from .collection_tracker import PHOTO_RETENTION_DAYS
 from .db import get_db
+from .media import RECORDING_RETENTION_DAYS
 from .models import Area, Contact
 from .pickups import describe, upcoming
 from .sms import InvalidPhone, normalize_phone
@@ -89,4 +90,5 @@ def info():
         "organization": os.getenv("ORG_NAME", ""),
         "privacy_contact": os.getenv("PRIVACY_CONTACT", ""),
         "photo_retention_days": PHOTO_RETENTION_DAYS,
+        "recording_retention_days": RECORDING_RETENTION_DAYS,
     }

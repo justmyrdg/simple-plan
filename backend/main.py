@@ -16,6 +16,9 @@ Settings (optional) go in backend/.env as KEY=value lines:
     JWT_SECRET             token signing secret (otherwise generated into backend/.jwt_secret)
     CAMERA_CHECK_SECONDS   how often the server checks each network camera itself (default 30, 0 = off)
     CAMERA_THRESHOLD       trash threshold for those checks (default 0.5)
+    S3_BUCKET              keep photos, snapshots and recordings in this S3 bucket (see storage.py)
+    RECORDING_MAX_SECONDS  longest manual recording (default 600); see recorder.py for the others
+    RECORDING_RESULT_SECONDS  how often the detector's verdict is noted during a recording (default 5, 0 = off)
 """
 
 import asyncio
@@ -50,9 +53,9 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from sqlalchemy import inspect, select, text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
-from backend import areas, auth, cameras, collection_tracker, dashboard, public, reports  # noqa: E402
+from backend import areas, auth, cameras, collection_tracker, dashboard, media, public, recorder, reports, storage  # noqa: E402
 from backend.db import Base, SessionLocal, engine, get_db  # noqa: E402
-from backend.models import Area, Detection, User  # noqa: E402
+from backend.models import Area, Detection, RecordingResult, User  # noqa: E402
 from backend.scheduler import reminder_loop  # noqa: E402
 from trash_detector import DEFAULT_HEAD, TrashDetector  # noqa: E402
 
@@ -61,6 +64,7 @@ DETECTION_LOG_EVERY = timedelta(seconds=60)
 
 CAMERA_CHECK_SECONDS = float(os.getenv("CAMERA_CHECK_SECONDS", "30"))
 CAMERA_THRESHOLD = float(os.getenv("CAMERA_THRESHOLD", "0.5"))
+RECORDING_RESULT_SECONDS = float(os.getenv("RECORDING_RESULT_SECONDS", "5"))
 
 # columns added to existing tables after the first release: {table: {column: SQL type}}
 ADDED_COLUMNS = {
@@ -107,10 +111,14 @@ def init_db():
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
-    tasks = [asyncio.create_task(reminder_loop()), asyncio.create_task(camera_watch_loop())]
+    with SessionLocal() as db:
+        recorder.recover(db)
+    tasks = [asyncio.create_task(reminder_loop()), asyncio.create_task(camera_watch_loop()),
+             asyncio.create_task(recording_result_loop())]
     yield
     for t in tasks:
         t.cancel()
+    await asyncio.to_thread(recorder.stop_all)
     cameras.stop_all()
 
 
@@ -127,6 +135,7 @@ app.include_router(dashboard.router)
 app.include_router(public.router)
 app.include_router(cameras.router)
 app.include_router(collection_tracker.router)
+app.include_router(media.router)
 app.include_router(reports.router)
 
 # Load the model once at startup; it's shared by every request.
@@ -193,12 +202,13 @@ def record_detection(db: Session, area_id: int, is_trash: bool, score: float, so
 
 
 def save_photo(detection_id: int, bgr: np.ndarray, max_width: int = 1280) -> str:
-    collection_tracker.PHOTO_DIR.mkdir(parents=True, exist_ok=True)
+    storage.folder("photos").mkdir(parents=True, exist_ok=True)
     h, w = bgr.shape[:2]
     if w > max_width:
         bgr = cv2.resize(bgr, (max_width, round(h * max_width / w)), interpolation=cv2.INTER_AREA)
     name = f"{detection_id}.jpg"
-    cv2.imwrite(str(collection_tracker.PHOTO_DIR / name), bgr, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    cv2.imwrite(str(storage.local_path("photos", name)), bgr, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    storage.upload_later("photos", name)  # to S3 in the background when S3_BUCKET is set
     return name
 
 
@@ -270,6 +280,31 @@ async def camera_watch_loop():
             except Exception as e:  # keep watching the other cameras
                 print(f"[camera] {area.name}: check failed: {e!r}")
         await asyncio.sleep(CAMERA_CHECK_SECONDS)
+
+
+async def recording_result_loop():
+    """While an area is being recorded, note the detector's verdict every few seconds against the video's timeline."""
+    if RECORDING_RESULT_SECONDS <= 0:
+        return
+    while True:
+        for recording_id, area_id, offset in recorder.video_positions():
+            try:
+                with SessionLocal() as db:
+                    area = db.get(Area, area_id)
+                if area is None:
+                    continue
+                bgr = await asyncio.to_thread(cameras.grab_frame, area)
+                result, _ = await asyncio.to_thread(run_detector, bgr, CAMERA_THRESHOLD, 3)
+                with SessionLocal() as db:
+                    db.add(RecordingResult(recording_id=recording_id, offset=round(offset, 1),
+                                           status="trash" if result["is_trash"] else "clean",
+                                           score=round(float(result["score"]), 4)))
+                    db.commit()
+            except cameras.CameraError:
+                pass  # the recording itself reports a dead camera; just skip this sample
+            except Exception as e:  # keep noting the other recordings
+                print(f"[recording] {recording_id}: could not note the result: {e!r}")
+        await asyncio.sleep(RECORDING_RESULT_SECONDS)
 
 
 if __name__ == "__main__":

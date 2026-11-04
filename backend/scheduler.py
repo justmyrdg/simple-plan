@@ -3,7 +3,8 @@ Background loop, every minute:
   - texts each area's contacts before a scheduled pickup (in each contact's language)
   - texts them again at the pickup time itself (schedules with notify_at_pickup)
   - judges scheduled pickups from the camera history (collection_tracker)
-  - deletes camera photos older than PHOTO_RETENTION_DAYS (Data Privacy Act: keep only what's needed)
+  - deletes camera photos, snapshots and recordings past their retention time (Data Privacy Act: keep only what's needed)
+  - retries uploads of camera files to S3 that failed earlier
 """
 
 import asyncio
@@ -12,8 +13,10 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .collection_tracker import cleanup_photos, update_collections
+from . import recorder, storage
+from .collection_tracker import update_collections
 from .db import SessionLocal
+from .media import cleanup_media
 from .models import Contact, Schedule, SmsLog
 from .pickups import occurrences
 from .sms import at_pickup_text, reminder_text, send_sms
@@ -80,7 +83,8 @@ def _tick():
     with SessionLocal() as db:
         sent = send_due_reminders(db)
         decided = update_collections(db)
-        cleanup_photos(db)
+        cleanup_media(db)
+        storage.sync_pending(recorder.active_names())
         return sent, decided
 
 

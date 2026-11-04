@@ -107,6 +107,48 @@ class Detection(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)
 
 
+class Snapshot(Base):
+    """A photo an admin saved by hand from an area's network camera. The file is <id>.jpg in storage 'snapshots'."""
+
+    __tablename__ = "snapshots"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    area_id: Mapped[int] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"), index=True)
+    taken_by: Mapped[str] = mapped_column(String(64), default="")
+    note: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)
+
+
+class Recording(Base):
+    """
+    A video an admin recorded by hand from an area's network camera (no audio). The file is <id>.mp4
+    in storage 'recordings'. status: 'recording' | 'done' | 'failed'.
+    """
+
+    __tablename__ = "recordings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    area_id: Mapped[int] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"), index=True)
+    started_by: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[str] = mapped_column(String(16), default="recording")
+    error: Mapped[str] = mapped_column(Text, default="")
+    size: Mapped[int] = mapped_column(Integer, default=0)  # bytes
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class RecordingResult(Base):
+    """The detector's verdict at one moment of a recording; `offset` is seconds from the start of the video."""
+
+    __tablename__ = "recording_results"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    recording_id: Mapped[int] = mapped_column(ForeignKey("recordings.id", ondelete="CASCADE"), index=True)
+    offset: Mapped[float] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String(16))  # 'trash' | 'clean'
+    score: Mapped[float] = mapped_column(Float)
+
+
 class Collection(Base):
     """
     What happened at one scheduled pickup, judged from the camera history around it:

@@ -112,6 +112,50 @@ network. Use the **site agent** instead (see `CAMERA_SETUP.md`, Part 7), with
 `"server": "https://trashwatch.example.com"` (or `http://<elastic IP>`) in `agent/agent.json`.
 Leave **Network camera address** empty for those areas.
 
+If the server can reach the cameras (see `docs/REMOTE_CAMERA.md`), set `CAMERA_CHECK_SECONDS=30` instead
+and put each camera's RTSP address in **Network camera address**.
+
+## 5. Keep photos and videos in S3 (optional)
+
+Without this, status-change photos, saved snapshots and recordings stay on the server's disk
+(`/opt/trashwatch/backend/captures`). With it, each file is uploaded to S3 right after it is saved and then
+**deleted from the server**; a failed upload is retried every minute. Viewing and downloading go through
+short-lived S3 links, so the files never pass through nginx.
+
+1. **Create a private bucket**: S3 → Create bucket, in the same region as the server (e.g. `ap-southeast-1`),
+   with **Block all public access** left on.
+2. **Create an IAM policy** (IAM → Policies → Create policy → JSON), replacing `YOUR-BUCKET`:
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [{
+       "Effect": "Allow",
+       "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+       "Resource": "arn:aws:s3:::YOUR-BUCKET/*"
+     }]
+   }
+   ```
+3. **Create a role for EC2** (IAM → Roles → Create role → AWS service → EC2) with that policy, then attach it:
+   EC2 → the instance → **Actions → Security → Modify IAM role**. No access keys go on the server.
+4. **Add to `/opt/trashwatch/backend/.env`**, then `sudo systemctl restart trashwatch`:
+
+   ```
+   S3_BUCKET=YOUR-BUCKET
+   AWS_REGION=ap-southeast-1
+   S3_PREFIX=trashwatch        # optional folder inside the bucket
+   ```
+5. **Check it**: on the **Monitor** page save a photo, then look in the bucket under `trashwatch/snapshots/`.
+   `sudo journalctl -u trashwatch -f` shows `[storage]` lines if an upload or delete fails.
+
+Files are deleted from S3 by the app (retention days in `.env`, the Delete buttons, or deleting an area).
+You can also add an S3 lifecycle rule that expires objects after a longer time as a safety net. Existing
+photos already on the disk are uploaded by the same retry sweep after the restart.
+
+Recordings use `ffmpeg`, which comes with the Python packages (`imageio-ffmpeg`); nothing else to install.
+The camera's upload bandwidth matters: a main stream is roughly 4–8 Mbps, so recording the lighter sub-stream
+(`/Streaming/Channels/102`) is kinder to a home connection.
+
 ## Useful commands on the server
 
 | Task | Command |

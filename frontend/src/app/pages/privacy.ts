@@ -5,7 +5,7 @@ import { ApiService } from '../core/api.service';
 /**
  * Public privacy notice (Data Privacy Act of 2012, RA 10173). The organization name, privacy
  * contact and photo retention period come from backend/.env (ORG_NAME, PRIVACY_CONTACT,
- * PHOTO_RETENTION_DAYS).
+ * PHOTO_RETENTION_DAYS, RECORDING_RETENTION_DAYS).
  */
 @Component({
   selector: 'app-privacy',
@@ -37,7 +37,7 @@ import { ApiService } from '../core/api.service';
         <ul>
           <li><strong>Your name and mobile number</strong>, and the collection area you belong to, only if you agreed to receive SMS reminders.</li>
           <li><strong>The SMS messages sent to you</strong> and whether they were delivered to the SMS provider.</li>
-          <li><strong>Camera images of garbage collection points.</strong> Cameras face the collection area, not homes. They are used to tell whether the area is full or clean.</li>
+          <li><strong>Camera images and short video clips of garbage collection points.</strong> Cameras face the collection area, not homes. Images are used to tell whether the area is full or clean; an administrator may also save a photo or a video clip (without sound) as a record of an incident. They may be stored on the operator's cloud storage.</li>
         </ul>
 
         <h2>Why we collect it</h2>
@@ -48,7 +48,7 @@ import { ApiService } from '../core/api.service';
 
         <h2>How long we keep it</h2>
         <ul>
-          <li>Camera photos are deleted automatically after <strong>{{ retention() }} days</strong>.</li>
+          <li>Camera photos are deleted automatically after <strong>{{ retention() }} days</strong>, and video clips after <strong>{{ videoRetention() }} days</strong>. Administrators can delete them sooner.</li>
           <li>Your name and number are kept until you stop the reminders or ask to be removed.</li>
         </ul>
 
@@ -72,12 +72,14 @@ export class Privacy implements OnInit {
   protected org = signal('');
   protected contact = signal('');
   protected retention = signal(30);
+  protected videoRetention = signal(14);
 
   ngOnInit() {
     this.api.publicInfo().subscribe((i) => {
       this.org.set(i.organization);
       this.contact.set(i.privacy_contact);
       this.retention.set(i.photo_retention_days);
+      this.videoRetention.set(i.recording_retention_days);
     });
   }
 }

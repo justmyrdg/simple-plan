@@ -13,7 +13,9 @@ Data Protection Officer (DPO).
 | **Withdrawing consent** | Residents stop SMS themselves at **/stop** (no login). Every SMS includes the link when `PUBLIC_URL` is set. Admins can't switch an opted-out resident back on without confirming new consent. |
 | **Transparency** | A public **Privacy notice** at **/privacy**, linked from the public page and /stop. Fill in `ORG_NAME` and `PRIVACY_CONTACT` in `backend/.env`. |
 | **Proportionality** | Only name, mobile number and area are stored. Photos are saved only when an area's status changes, not continuously. |
-| **Retention** | Camera photos are deleted automatically after `PHOTO_RETENTION_DAYS` (default 30). |
+| **Retention** | Camera photos and snapshots saved by an admin are deleted automatically after `PHOTO_RETENTION_DAYS` (default 30), and recordings after `RECORDING_RETENTION_DAYS` (default 14). |
+| **Deleting on request** | Admins can delete any photo, snapshot or recording at once with its Delete button. Deleting an area removes all its photos and videos too, including the copies in S3. |
+| **Video** | Recordings are started and stopped by hand, have no sound, are capped at `RECORDING_MAX_SECONDS` (default 10 minutes), and record who started them. Only admin logins can view them. |
 | **Not revealing who is registered** | /stop gives the same answer whether or not a number is on the list. |
 | **Access control** | Admin pages, camera video and photos require login. Passwords are hashed with bcrypt. |
 | **Right to erasure** | Deleting a contact removes the name and number. Their SMS log entries keep only a masked number (`09•••••2233`), so report counts stay correct. |
@@ -36,7 +38,9 @@ Data Protection Officer (DPO).
 5. **Restrict admin accounts** to people who need them, and use strong passwords.
 6. **Back up the database securely.** It contains personal data, so don't put it on GitHub. The
    `.gitignore` already excludes it.
-7. Ask your adviser or DPO whether the deployment needs **NPC registration** or a privacy impact
+7. **Keep the S3 bucket private** (Block all public access on) and limit who can open the AWS account. Record
+   only when there is a reason (for example a missed pickup or illegal dumping) and delete the clip when done.
+8. Ask your adviser or DPO whether the deployment needs **NPC registration** or a privacy impact
    assessment.
 
 ## For the thesis
@@ -44,7 +48,7 @@ Data Protection Officer (DPO).
 In the methodology or ethics section, describe:
 - the consent process
 - the privacy notice
-- photo retention
+- photo and video retention, and who may record
 - opt-out
 - camera placement
 - HTTPS

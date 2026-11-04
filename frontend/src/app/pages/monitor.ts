@@ -7,6 +7,7 @@ import { ApiService, Area } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
 import { ScoreGauge } from '../shared/score-gauge';
 import { TrendChart, TrendPoint } from '../shared/trend-chart';
+import { MediaPanel } from '../shared/media-panel';
 
 const AREA_KEY = 'tw_monitor_area';
 
@@ -32,7 +33,7 @@ const THUMB_WIDTH = 160;
 
 @Component({
   selector: 'app-monitor',
-  imports: [DecimalPipe, PercentPipe, ScoreGauge, TrendChart],
+  imports: [DecimalPipe, PercentPipe, ScoreGauge, TrendChart, MediaPanel],
   templateUrl: './monitor.html',
 })
 export class Monitor implements OnInit, OnDestroy {

@@ -18,13 +18,12 @@ No truck detection is needed: the area going from full to clean is the evidence.
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import storage
 from .auth import current_user, current_user_or_query_token
 from .db import get_db
 from .models import Area, Collection, Detection, Schedule, SmsLog
@@ -39,7 +38,6 @@ LATE_AFTER = timedelta(minutes=int(os.getenv("COLLECTION_LATE_MINUTES", "30")))
 LOOKBACK = timedelta(days=7)            # how far back unjudged pickups are caught up (e.g. after downtime)
 PHOTO_RETENTION_DAYS = int(os.getenv("PHOTO_RETENTION_DAYS", "30"))
 
-PHOTO_DIR = Path(__file__).resolve().parent / "captures"
 FINAL = ("collected", "missed", "no_waste", "no_data")
 
 
@@ -163,27 +161,6 @@ def update_collections(db: Session, now: datetime | None = None) -> list[str]:
     return decided
 
 
-_last_cleanup: datetime | None = None
-
-
-def cleanup_photos(db: Session, now: datetime | None = None):
-    """Delete camera photos older than PHOTO_RETENTION_DAYS, at most once an hour."""
-    global _last_cleanup
-    now = now or datetime.now()
-    if PHOTO_RETENTION_DAYS <= 0 or (_last_cleanup and now - _last_cleanup < timedelta(hours=1)):
-        return
-    _last_cleanup = now
-    old = db.scalars(select(Detection).where(
-        Detection.photo != "", Detection.created_at < now - timedelta(days=PHOTO_RETENTION_DAYS)
-    )).all()
-    for d in old:
-        (PHOTO_DIR / d.photo).unlink(missing_ok=True)
-        d.photo = ""
-    if old:
-        db.commit()
-        print(f"[collection] deleted {len(old)} photo(s) older than {PHOTO_RETENTION_DAYS} days")
-
-
 # ---------- output ----------
 
 def collection_out(c: Collection, area_name: str) -> dict:
@@ -210,7 +187,16 @@ def list_collections(db: Session, since: datetime, until: datetime | None = None
         q = q.where(Collection.scheduled_for <= until)
     if area_id is not None:
         q = q.where(Collection.area_id == area_id)
-    return [collection_out(c, name) for c, name in db.execute(q).all()]
+    rows = db.execute(q).all()
+    out = [collection_out(c, name) for c, name in rows]
+    # a photo can be gone (deleted by hand or expired): don't point at it
+    ids = {i for c, _ in rows for i in (c.before_detection_id, c.after_detection_id) if i}
+    have = set(db.scalars(select(Detection.id).where(Detection.id.in_(ids), Detection.photo != ""))) if ids else set()
+    for o in out:
+        for k in ("before_photo", "after_photo"):
+            if o[k] not in have:
+                o[k] = None
+    return out
 
 
 router = APIRouter(prefix="/api", tags=["collections"])
@@ -224,6 +210,17 @@ def get_collections(area_id: int | None = None, days: int = 30, db: Session = De
 @router.get("/detections/{detection_id}/photo", dependencies=[Depends(current_user_or_query_token)])
 def detection_photo(detection_id: int, db: Session = Depends(get_db)):
     d = db.get(Detection, detection_id)
-    if d is None or not d.photo or not (PHOTO_DIR / d.photo).exists():
+    if d is None or not d.photo:
         raise HTTPException(404, "Photo not found")
-    return FileResponse(PHOTO_DIR / d.photo, media_type="image/jpeg")
+    return storage.serve("photos", d.photo)
+
+
+@router.delete("/detections/{detection_id}/photo", status_code=204, dependencies=[Depends(current_user)])
+def delete_detection_photo(detection_id: int, db: Session = Depends(get_db)):
+    d = db.get(Detection, detection_id)
+    if d is None or not d.photo:
+        raise HTTPException(404, "Photo not found")
+    if not storage.delete("photos", d.photo):
+        raise HTTPException(502, "Could not remove the file from cloud storage. Try again in a moment.")
+    d.photo = ""
+    db.commit()

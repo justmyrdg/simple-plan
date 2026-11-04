@@ -53,6 +53,39 @@ export interface Collection {
   after_photo: number | null;
 }
 
+/** A photo an admin saved by hand from the network camera. */
+export interface SnapshotItem {
+  id: number;
+  area_id: number;
+  taken_by: string;
+  note: string;
+  created_at: string;
+}
+
+/** A video an admin recorded by hand. Playable once status is 'done'. */
+export interface RecordingItem {
+  id: number;
+  area_id: number;
+  started_by: string;
+  status: 'recording' | 'done' | 'failed';
+  error: string;
+  size: number; // bytes
+  started_at: string;
+  ended_at: string | null;
+  seconds: number;
+}
+/** The detector's verdict `t` seconds into a recording. */
+export interface RecordingResultItem {
+  t: number;
+  status: 'trash' | 'clean';
+  score: number;
+}
+export interface RecordingList {
+  items: RecordingItem[];
+  max_seconds: number; // a recording stops by itself after this long
+  cloud: boolean; // files are kept in S3 instead of on the server
+}
+
 export interface ReportStats {
   pickups: number;
   collected: number;
@@ -187,6 +220,18 @@ export class ApiService {
   report(days: number) { return this.http.get<Report>('/api/reports/summary', { params: { days } }); }
   reportCsv(days: number) { return this.http.get('/api/reports/collections.csv', { params: { days }, responseType: 'blob' }); }
 
+  deletePhoto(detectionId: number) { return this.http.delete(`/api/detections/${detectionId}/photo`); }
+
+  // saved snapshots & recordings (network cameras)
+  snapshots(areaId: number) { return this.http.get<SnapshotItem[]>(`/api/cameras/${areaId}/snapshots`); }
+  saveSnapshot(areaId: number, note = '') { return this.http.post<SnapshotItem>(`/api/cameras/${areaId}/snapshots`, { note }); }
+  deleteSnapshot(id: number) { return this.http.delete(`/api/snapshots/${id}`); }
+  recordings(areaId: number) { return this.http.get<RecordingList>(`/api/cameras/${areaId}/recordings`); }
+  startRecording(areaId: number) { return this.http.post<RecordingItem>(`/api/cameras/${areaId}/recordings/start`, {}); }
+  stopRecording(areaId: number) { return this.http.post<RecordingItem>(`/api/cameras/${areaId}/recordings/stop`, {}); }
+  recordingResults(id: number) { return this.http.get<RecordingResultItem[]>(`/api/recordings/${id}/results`); }
+  deleteRecording(id: number) { return this.http.delete(`/api/recordings/${id}`); }
+
   // dashboard & logs
   dashboard() { return this.http.get<Dashboard>('/api/dashboard'); }
   smsLog(areaId?: number) {
@@ -197,7 +242,9 @@ export class ApiService {
   publicAreas() { return this.http.get<PublicArea[]>('/api/public/areas'); }
   publicArea(id: number) { return this.http.get<PublicAreaDetail>(`/api/public/areas/${id}`); }
   publicInfo() {
-    return this.http.get<{ organization: string; privacy_contact: string; photo_retention_days: number }>('/api/public/info');
+    return this.http.get<{
+      organization: string; privacy_contact: string; photo_retention_days: number; recording_retention_days: number;
+    }>('/api/public/info');
   }
   optOut(phone: string) { return this.http.post<{ message: string }>('/api/public/opt-out', { phone }); }
 }

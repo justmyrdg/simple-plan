@@ -7,10 +7,11 @@ import {
 } from '../core/api.service';
 import { AreaForm } from '../shared/area-form';
 import { CollectionList } from '../shared/collection-list';
+import { MediaPanel } from '../shared/media-panel';
 import { AreaMap, MapMarker } from '../shared/area-map';
 import { fmtAgo, fmtDate, fmtDateTime } from '../shared/format';
 
-type Tab = 'contacts' | 'schedule' | 'collections' | 'messages';
+type Tab = 'contacts' | 'schedule' | 'collections' | 'media' | 'messages';
 
 const EMPTY_SCHEDULE: ScheduleInput = {
   kind: 'weekly', weekday: 0, date: null, time: '07:00', truck: '', notes: '', notify_minutes_before: 60, notify_at_pickup: true, active: true,
@@ -18,7 +19,7 @@ const EMPTY_SCHEDULE: ScheduleInput = {
 
 @Component({
   selector: 'app-area-detail',
-  imports: [RouterLink, PercentPipe, AreaForm, AreaMap, CollectionList],
+  imports: [RouterLink, PercentPipe, AreaForm, AreaMap, CollectionList, MediaPanel],
   template: `
     <header class="page-head">
       <div>
@@ -64,6 +65,7 @@ const EMPTY_SCHEDULE: ScheduleInput = {
           <button [class.active]="tab() === 'contacts'" (click)="tab.set('contacts')"><svg class="icon"><use href="#i-users" /></svg> Contacts</button>
           <button [class.active]="tab() === 'schedule'" (click)="tab.set('schedule')"><svg class="icon"><use href="#i-calendar" /></svg> Pickup schedule</button>
           <button [class.active]="tab() === 'collections'" (click)="tab.set('collections'); loadCollections()"><svg class="icon"><use href="#i-truck" /></svg> Collections</button>
+          <button [class.active]="tab() === 'media'" (click)="tab.set('media')"><svg class="icon"><use href="#i-snap" /></svg> Photos &amp; videos</button>
           <button [class.active]="tab() === 'messages'" (click)="tab.set('messages'); loadSms()"><svg class="icon"><use href="#i-message" /></svg> Messages</button>
         </nav>
 
@@ -181,6 +183,13 @@ const EMPTY_SCHEDULE: ScheduleInput = {
               between 2 hours before and 4 hours after the scheduled time. Photos are taken when the status changes.</p>
             <app-collection-list [items]="collections()" [showArea]="false"
                                  empty="No pickups judged yet. Add a pickup schedule; each pickup is checked once its time window starts." />
+          </section>
+        }
+
+        <!-- ===== Photos & videos ===== -->
+        @if (tab() === 'media') {
+          <section class="card">
+            <app-media-panel [areaId]="a.id" [canCapture]="!!a.camera_url" />
           </section>
         }
 

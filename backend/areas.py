@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from . import media
 from .auth import current_user
 from .db import get_db
 from .models import Area, Contact, Detection, Schedule, SmsLog
@@ -191,7 +192,10 @@ def update_area(area_id: int, body: AreaIn, db: Session = Depends(get_db)):
 
 @router.delete("/areas/{area_id}", status_code=204)
 def delete_area(area_id: int, db: Session = Depends(get_db)):
-    db.delete(_area_or_404(db, area_id))
+    area = _area_or_404(db, area_id)
+    if not media.purge_area(db, area_id):
+        raise HTTPException(502, "Could not remove this area's photos and videos from cloud storage. Try again in a moment.")
+    db.delete(area)
     db.commit()
 
 

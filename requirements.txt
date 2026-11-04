@@ -11,3 +11,5 @@ SQLAlchemy>=2.0
 PyJWT
 bcrypt
 requests
+boto3
+imageio-ffmpeg

@@ -1,6 +1,6 @@
-import { Component, inject, input } from '@angular/core';
+import { Component, inject, input, output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Collection, CollectionStatus } from '../core/api.service';
+import { ApiService, Collection, CollectionStatus } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
 import { fmtDateTime, fmtTime } from './format';
 
@@ -12,7 +12,7 @@ export const COLLECTION_STATUS: Record<CollectionStatus, { label: string; icon: 
   no_data: { label: 'No camera data', icon: '#i-camera' },
 };
 
-/** Scheduled pickups and whether the camera saw the area get collected, with before / after photos. */
+/** Scheduled pickups and whether the camera saw the area get collected, with before / after photos (each can be deleted). */
 @Component({
   selector: 'app-collection-list',
   imports: [RouterLink],
@@ -36,19 +36,22 @@ export const COLLECTION_STATUS: Record<CollectionStatus, { label: string; icon: 
               @if (c.hours_full !== null) { <span>Full for {{ duration(c.hours_full) }}</span> }
             </div>
           </div>
-          @if (c.before_photo || c.after_photo) {
-            <div class="cl-photos">
-              @if (c.before_photo) {
-                <a [href]="photoUrl(c.before_photo)" target="_blank" rel="noopener" title="Before (full)">
-                  <img [src]="photoUrl(c.before_photo)" alt="Before: area full" loading="lazy" /><span>Before</span>
-                </a>
-              }
-              @if (c.after_photo) {
-                <a [href]="photoUrl(c.after_photo)" target="_blank" rel="noopener" title="After (clean)">
-                  <img [src]="photoUrl(c.after_photo)" alt="After: area clean" loading="lazy" /><span>After</span>
-                </a>
-              }
-            </div>
+          @if (photos(c); as list) {
+            @if (list.length) {
+              <div class="cl-photos">
+                @for (p of list; track p.id) {
+                  <div class="cl-photo">
+                    <a [href]="photoUrl(p.id)" target="_blank" rel="noopener" [title]="p.title">
+                      <img [src]="photoUrl(p.id)" [alt]="p.title" loading="lazy" /><span>{{ p.label }}</span>
+                    </a>
+                    <button type="button" class="cl-photo-del" (click)="deletePhoto(p.id)"
+                            title="Delete this photo" aria-label="Delete this photo">
+                      <svg class="icon icon-sm"><use href="#i-delete" /></svg>
+                    </button>
+                  </div>
+                }
+              </div>
+            }
           }
         </li>
       } @empty {
@@ -59,10 +62,14 @@ export const COLLECTION_STATUS: Record<CollectionStatus, { label: string; icon: 
 })
 export class CollectionList {
   private auth = inject(AuthService);
+  private api = inject(ApiService);
 
   readonly items = input.required<Collection[]>();
   readonly showArea = input(true);
   readonly empty = input('No pickups judged yet.');
+  readonly photoDeleted = output<number>();
+
+  private readonly deleted = signal<number[]>([]);
 
   protected status = COLLECTION_STATUS;
   protected time = fmtTime;
@@ -71,6 +78,25 @@ export class CollectionList {
   // <img> can't send the auth header, so the token goes in the URL (same as the camera stream)
   protected photoUrl(detectionId: number) {
     return `/api/detections/${detectionId}/photo?token=${encodeURIComponent(this.auth.token() ?? '')}`;
+  }
+
+  protected photos(c: Collection) {
+    const all = [
+      { id: c.before_photo, label: 'Before', title: 'Before (area full)' },
+      { id: c.after_photo, label: 'After', title: 'After (area clean)' },
+    ];
+    return all.filter((p): p is { id: number; label: string; title: string } => p.id !== null && !this.deleted().includes(p.id));
+  }
+
+  protected deletePhoto(detectionId: number) {
+    if (!confirm('Delete this photo? This cannot be undone.')) return;
+    this.api.deletePhoto(detectionId).subscribe({
+      next: () => {
+        this.deleted.update((d) => [...d, detectionId]);
+        this.photoDeleted.emit(detectionId);
+      },
+      error: () => alert('Could not delete the photo. Try again.'),
+    });
   }
 
   protected timing(c: Collection) {
