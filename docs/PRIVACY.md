@@ -15,7 +15,7 @@ Data Protection Officer (DPO).
 | **Proportionality** | Only name, mobile number and area are stored. Photos are saved only when an area's status changes, not continuously. |
 | **Retention** | Camera photos and snapshots saved by an admin are deleted automatically after `PHOTO_RETENTION_DAYS` (default 30), and recordings after `RECORDING_RETENTION_DAYS` (default 14). |
 | **Deleting on request** | Admins can delete any photo, snapshot or recording at once with its Delete button. Deleting an area removes all its photos and videos too, including the copies in S3. |
-| **Video** | Recordings are started and stopped by hand, have no sound, are capped at `RECORDING_MAX_SECONDS` (default 10 minutes), and record who started them. Only admin logins can view them. |
+| **Video** | Recordings are started and stopped by hand, have no sound, run until stopped (optionally capped with `RECORDING_MAX_SECONDS`), and record who started them. Only admin logins can view them. |
 | **Not revealing who is registered** | /stop gives the same answer whether or not a number is on the list. |
 | **Access control** | Admin pages, camera video and photos require login. Passwords are hashed with bcrypt. |
 | **Right to erasure** | Deleting a contact removes the name and number. Their SMS log entries keep only a masked number (`09•••••2233`), so report counts stay correct. |

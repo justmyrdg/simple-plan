@@ -17,7 +17,7 @@ Settings (optional) go in backend/.env as KEY=value lines:
     CAMERA_CHECK_SECONDS   how often the server checks each network camera itself (default 30, 0 = off)
     CAMERA_THRESHOLD       trash threshold for those checks (default 0.5)
     S3_BUCKET              keep photos, snapshots and recordings in this S3 bucket (see storage.py)
-    RECORDING_MAX_SECONDS  longest manual recording (default 600); see recorder.py for the others
+    RECORDING_MAX_SECONDS  longest manual recording (default 0 = no limit); see recorder.py for the others
     RECORDING_RESULT_SECONDS  how often the detector's verdict is noted during a recording (default 5, 0 = off)
 """
 

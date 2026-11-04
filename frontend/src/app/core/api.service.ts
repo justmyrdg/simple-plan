@@ -84,7 +84,7 @@ export interface RecordingResultItem {
 }
 export interface RecordingList {
   items: RecordingItem[];
-  max_seconds: number; // a recording stops by itself after this long
+  max_seconds: number; // a recording stops by itself after this long (0 = no limit)
   cloud: boolean; // files are kept in S3 instead of on the server
 }
 

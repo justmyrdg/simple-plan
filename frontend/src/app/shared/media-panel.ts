@@ -17,7 +17,7 @@ import { fmtDateTime } from './format';
       <div class="mp-actions">
         <div class="mp-group">
           @if (active()) {
-            <span class="live-badge"><span class="live-dot"></span> REC {{ clock(elapsed()) }} / {{ clock(maxSeconds()) }}</span>
+            <span class="live-badge"><span class="live-dot"></span> REC {{ clock(elapsed()) }}@if (maxSeconds() > 0) { / {{ clock(maxSeconds()) }} }</span>
             <button class="btn btn-danger" (click)="stop()" [disabled]="busy()">{{ busy() ? 'Saving…' : 'Stop recording' }}</button>
           } @else {
             <button class="btn" (click)="start()" [disabled]="busy() || !canCapture()">
@@ -37,7 +37,7 @@ import { fmtDateTime } from './format';
         <p class="muted small">Add a network camera address to this area (Areas page) to save photos and videos.</p>
       }
       <p class="muted small">
-        Videos have no sound and stop by themselves after {{ clock(maxSeconds()) }}.
+        Videos have no sound and {{ maxSeconds() > 0 ? 'stop by themselves after ' + clock(maxSeconds()) : 'keep recording until you stop them' }}.
         {{ cloud() ? 'Files are kept in cloud storage.' : 'Files are kept on the server.' }}
         Anyone with an admin login can see and delete them.
       </p>
@@ -154,7 +154,7 @@ export class MediaPanel implements OnDestroy {
 
   protected snapshots = signal<SnapshotItem[]>([]);
   protected recordings = signal<RecordingItem[]>([]);
-  protected maxSeconds = signal(600);
+  protected maxSeconds = signal(0); // 0 = no limit; replaced by the server's value once the list loads
   protected cloud = signal(false);
   protected busy = signal(false);
   protected error = signal<string | null>(null);

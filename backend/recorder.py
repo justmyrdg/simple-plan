@@ -4,14 +4,15 @@ Manual video recording of an area's network camera.
 An admin starts and stops a recording; the server runs `ffmpeg` against the camera's address and
 copies the video as it is (no re-encoding, so little CPU) into a fragmented MP4, which browsers can
 play and which stays playable even if the server dies mid-recording. Audio is never recorded.
-A recording ends by itself after RECORDING_MAX_SECONDS. When it ends the file is handed to
-storage (uploaded to S3 and deleted from disk when S3 is on).
+A recording has no time limit unless RECORDING_MAX_SECONDS is set (0 = until stopped); it also ends by
+itself if the disk is nearly full. When it ends the file is handed to storage (uploaded to S3 and
+deleted from disk when S3 is on).
 
 ffmpeg opens its own connection to the camera next to the one used for live detection; some
 cameras allow only a few streams at once, so point the area at the lighter sub-stream if needed.
 If the camera sends H.265, most browsers can't play the result (download it instead).
 
-    RECORDING_MAX_SECONDS     longest recording (default 600)
+    RECORDING_MAX_SECONDS     longest recording (default 0 = no limit)
     RECORDING_MAX_CONCURRENT  recordings at the same time (default 2)
     RECORDING_MIN_FREE_MB     refuse to start with less free disk than this (default 1024)
     FFMPEG_BIN                path to ffmpeg; otherwise the one on PATH, else the imageio-ffmpeg copy
@@ -33,10 +34,11 @@ from . import storage
 from .db import SessionLocal
 from .models import Recording
 
-MAX_SECONDS = int(os.getenv("RECORDING_MAX_SECONDS", "600"))
+MAX_SECONDS = int(os.getenv("RECORDING_MAX_SECONDS", "0"))  # 0 = until stopped
 MAX_CONCURRENT = int(os.getenv("RECORDING_MAX_CONCURRENT", "2"))
 MIN_FREE_BYTES = int(os.getenv("RECORDING_MIN_FREE_MB", "1024")) * 1024 * 1024
 CONNECT_SECONDS = 30  # ffmpeg creates the output file once the camera answers; none by then = unreachable
+DISK_STOP_BYTES = 200 * 1024 * 1024  # a running recording is closed cleanly when free disk drops below this
 MIN_USEFUL_BYTES = 4096  # a file smaller than this holds only the MP4 header: nothing was recorded
 KIND = "recordings"
 
@@ -113,7 +115,10 @@ def start(recording_id: int, area_id: int, url: str):
     if url.lower().startswith("rtsp"):
         cmd += ["-rtsp_transport", "tcp"]
     name = f"{recording_id}.mp4"
-    cmd += ["-i", url, "-t", str(MAX_SECONDS), "-an", "-c:v", "copy",
+    cmd += ["-i", url]
+    if MAX_SECONDS > 0:
+        cmd += ["-t", str(MAX_SECONDS)]
+    cmd += ["-an", "-c:v", "copy",
             "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-y", str(out_dir / name)]
     log_path = str(out_dir / f"{recording_id}.log")
 
@@ -169,18 +174,29 @@ def _clean(text: str, url: str) -> str:
 def _watch(a: _Active):
     path = storage.local_path(KIND, a.name)
     started = time.monotonic()
+    kill_at: float | None = None  # when to give up on a recording this loop asked to finish
+    next_disk_check = 0.0
     try:
         # ffmpeg's own -t counts the camera's timestamps, so the real-time limit is enforced here as well
         while a.proc.poll() is None:
-            waited = time.monotonic() - started
+            now = time.monotonic()
+            waited = now - started
             if a.video_start is None and path.exists():
-                a.video_start = time.monotonic()
+                a.video_start = now
             if not path.exists() and waited > CONNECT_SECONDS:
                 a.problem = f"Could not connect to the camera within {CONNECT_SECONDS} seconds."
                 a.proc.kill()
-            elif waited > MAX_SECONDS + 2 and not a.stopping:
-                _ask_to_finish(a)
-            elif waited > MAX_SECONDS + 15:  # asked to finish but it didn't (camera went silent)
+            elif not a.stopping:
+                if MAX_SECONDS > 0 and waited > MAX_SECONDS + 2:
+                    _ask_to_finish(a)
+                    kill_at = now + 13
+                elif now >= next_disk_check:  # with no time limit, one recording must not fill the disk
+                    next_disk_check = now + 10
+                    if shutil.disk_usage(path.parent).free < DISK_STOP_BYTES:
+                        a.problem = "Stopped because the server is almost out of disk space."
+                        _ask_to_finish(a)
+                        kill_at = now + 15
+            elif kill_at is not None and now > kill_at:  # asked to finish but it didn't (camera went silent)
                 a.proc.kill()
             time.sleep(0.5)
         a.proc.wait()
@@ -214,7 +230,9 @@ def _finish(a: _Active):
         row.size = size if useful else 0
         if useful:
             row.status = "done"
-            if a.proc.returncode not in (0, None) and not a.stopping:
+            if a.problem:
+                row.error = a.problem
+            elif a.proc.returncode not in (0, None) and not a.stopping:
                 row.error = ("The recording ended early. " + detail).strip()
         else:
             row.status = "failed"
