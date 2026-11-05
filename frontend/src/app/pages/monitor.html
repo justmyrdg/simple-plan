@@ -81,12 +81,7 @@
     <div class="stage" [class.stage-alert]="mode() === 'live' && alertActive()">
       @if (mode() === 'live') {
         @if (cameraOn()) {
-          <div class="media-wrap">
-            @if (streamUrl(); as url) {
-              <img #feedImg class="media" [src]="url" alt="Network camera feed" (error)="onFeedError()" />
-            } @else {
-              <video #video class="media" muted playsinline></video>
-            }
+          <ng-template #regionsTpl>
             @if (showRegions() && cells(); as c) {
               <div class="regions" [style.grid-template-columns]="'repeat(' + c.length + ', 1fr)'">
                 @for (row of c; track $index) {
@@ -97,6 +92,49 @@
                   }
                 }
               </div>
+            }
+          </ng-template>
+          <div class="media-wrap">
+            @if (streamUrl(); as url) {
+              <!-- network camera: zoom with the wheel or buttons, drag to move; Save makes the detector use this view -->
+              <div class="zoom-box" [class.zoom-box-zoomed]="zoom() > 1" [style.--aspect]="frameAspect()"
+                   (wheel)="onWheel($event)" (pointerdown)="onDragStart($event)" (pointermove)="onDragMove($event)"
+                   (pointerup)="onDragEnd()" (pointercancel)="onDragEnd()">
+                <img #feedImg class="zoom-img" [src]="url" [style.transform]="zoomTransform()" alt="Network camera feed"
+                     draggable="false" (error)="onFeedError()" (load)="onFeedLoad($event)" />
+                <!-- the shaded regions describe the saved view, so hide them while the view has unsaved changes -->
+                @if (!viewDirty() && !regionsStale()) {
+                  <ng-container *ngTemplateOutlet="regionsTpl" />
+                }
+                <div class="zoom-controls" (pointerdown)="$event.stopPropagation()" (wheel)="$event.stopPropagation()">
+                  <button class="btn" (click)="zoomBy(1.4)" [disabled]="zoom() >= 8" title="Zoom in" aria-label="Zoom in">
+                    <svg class="icon"><use href="#i-plus" /></svg>
+                  </button>
+                  <button class="btn" (click)="zoomBy(1 / 1.4)" [disabled]="zoom() <= 1" title="Zoom out" aria-label="Zoom out">
+                    <svg class="icon"><use href="#i-minus" /></svg>
+                  </button>
+                  <button class="btn" (click)="resetView()" [disabled]="zoom() <= 1" title="Show the whole picture" aria-label="Reset zoom">
+                    <svg class="icon"><use href="#i-refresh" /></svg>
+                  </button>
+                </div>
+                @if (zoom() > 1) {
+                  <div class="zoom-map" aria-hidden="true"><div class="zoom-map-view" [style.left]="miniRect().left" [style.top]="miniRect().top"
+                       [style.width]="miniRect().width" [style.height]="miniRect().height"></div></div>
+                }
+                <div class="zoom-status" (pointerdown)="$event.stopPropagation()">
+                  @if (viewDirty()) {
+                    <span>{{ zoom() | number: '1.1-1' }}× · not saved, the detector still uses the saved view</span>
+                    <button class="btn btn-primary btn-sm" (click)="saveView()" [disabled]="savingView()">
+                      {{ savingView() ? 'Saving…' : 'Save view' }}
+                    </button>
+                  } @else if (savedZoomed()) {
+                    <span>The detector looks at this view</span>
+                  }
+                </div>
+              </div>
+            } @else {
+              <video #video class="media" muted playsinline></video>
+              <ng-container *ngTemplateOutlet="regionsTpl" />
             }
             @if (alertActive()) {
               <div class="stage-banner">

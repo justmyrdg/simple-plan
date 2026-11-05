@@ -54,7 +54,7 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from sqlalchemy import inspect, select, text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
-from backend import areas, auth, cameras, collection_tracker, dashboard, media, public, recorder, reports, storage  # noqa: E402
+from backend import areas, auth, cameras, collection_tracker, dashboard, media, public, recorder, reports, storage, viewport  # noqa: E402
 from backend.db import Base, SessionLocal, engine, get_db  # noqa: E402
 from backend.models import Area, Detection, RecordingResult, User  # noqa: E402
 from backend.scheduler import reminder_loop  # noqa: E402
@@ -72,6 +72,10 @@ ADDED_COLUMNS = {
     "areas": {
         "camera_url": "VARCHAR(500) NOT NULL DEFAULT ''",
         "last_collected_at": "DATETIME",
+        "view_x": "FLOAT NOT NULL DEFAULT 0",
+        "view_y": "FLOAT NOT NULL DEFAULT 0",
+        "view_w": "FLOAT NOT NULL DEFAULT 1",
+        "view_h": "FLOAT NOT NULL DEFAULT 1",
     },
     "contacts": {
         "language": "VARCHAR(3) NOT NULL DEFAULT 'en'",
@@ -224,6 +228,8 @@ async def detect(
     grid: int = Form(3),
     area_id: int | None = Form(None),
     source: str = Form("live"),
+    # the frame is the area's full camera picture (the site agent sends this): score only its saved zoom
+    use_view: bool = Form(False),
     _user: User = Depends(auth.current_user),
     db: Session = Depends(get_db),
 ):
@@ -233,7 +239,12 @@ async def detect(
     if bgr is None:
         raise HTTPException(400, "Could not read the image. Upload a JPG, PNG, BMP or WEBP file.")
 
-    result, jpg = await asyncio.to_thread(run_detector, bgr, threshold, grid)
+    seen = bgr
+    if use_view and area_id is not None:
+        area = db.get(Area, area_id)
+        if area is not None:
+            seen = viewport.crop_view(bgr, area)
+    result, jpg = await asyncio.to_thread(run_detector, seen, threshold, grid)
 
     if area_id is not None:
         record_detection(db, area_id, bool(result["is_trash"]), float(result["score"]),
@@ -257,7 +268,7 @@ async def detect_camera(
         bgr = await asyncio.to_thread(cameras.grab_frame, area)
     except cameras.CameraError as e:
         raise HTTPException(503, str(e))
-    result, jpg = await asyncio.to_thread(run_detector, bgr, threshold, grid)
+    result, jpg = await asyncio.to_thread(run_detector, viewport.crop_view(bgr, area), threshold, grid)
     record_detection(db, area_id, bool(result["is_trash"]), float(result["score"]), "live", bgr)
     return detect_response(result, jpg, threshold, f"{area.name}.jpg")
 
@@ -273,7 +284,7 @@ async def camera_watch_loop():
         for area in watched:
             try:
                 bgr = await asyncio.to_thread(cameras.grab_frame, area)
-                result, _ = await asyncio.to_thread(run_detector, bgr, CAMERA_THRESHOLD, 3)
+                result, _ = await asyncio.to_thread(run_detector, viewport.crop_view(bgr, area), CAMERA_THRESHOLD, 3)
                 with SessionLocal() as db:
                     record_detection(db, area.id, bool(result["is_trash"]), float(result["score"]), "live", bgr)
                 if errors.pop(area.id, None):
@@ -299,7 +310,7 @@ async def recording_result_loop():
                 if area is None:
                     continue
                 bgr = await asyncio.to_thread(cameras.grab_frame, area)
-                result, _ = await asyncio.to_thread(run_detector, bgr, CAMERA_THRESHOLD, 3)
+                result, _ = await asyncio.to_thread(run_detector, viewport.crop_view(bgr, area), CAMERA_THRESHOLD, 3)
                 with SessionLocal() as db:
                     cells = result["cells"]
                     db.add(RecordingResult(recording_id=recording_id, offset=round(offset, 1),

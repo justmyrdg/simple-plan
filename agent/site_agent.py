@@ -182,7 +182,8 @@ class Server:
                 f"{self.url}/api/detect",
                 headers={"Authorization": f"Bearer {self.token}"},
                 files={"file": ("frame.jpg", jpg, "image/jpeg")},
-                data={"threshold": threshold, "grid": grid, "area_id": area_id, "source": "live"},
+                data={"threshold": threshold, "grid": grid, "area_id": area_id, "source": "live",
+                      "use_view": "true"},  # the full frame; the server scores the area's saved zoom
                 timeout=120,
             )
             if r.status_code == 401 and attempt == 0:  # token expired: log in again

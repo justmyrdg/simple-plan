@@ -193,6 +193,30 @@ h3 { margin: 0; font-size: 0.95rem; font-weight: 700; }
 .media-wrap { position: relative; width: 100%; }
 .media { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
 
+/* network camera with zoom: the box has the frame's shape and clips the zoomed picture */
+.zoom-box {
+  position: relative; overflow: hidden; margin: 0 auto;
+  width: min(100%, calc(70vh * var(--aspect, 1.7778))); aspect-ratio: var(--aspect, 1.7778);
+  touch-action: none; user-select: none;
+}
+.zoom-box-zoomed { cursor: grab; }
+.zoom-box-zoomed:active { cursor: grabbing; }
+.zoom-img { display: block; width: 100%; height: 100%; transform-origin: 0 0; pointer-events: none; }
+.zoom-controls { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 6px; }
+.zoom-controls .btn { width: 34px; height: 34px; padding: 0; justify-content: center; background: rgba(0, 0, 0, 0.55); border-color: rgba(255, 255, 255, 0.25); color: #fff; }
+.zoom-controls .btn:hover:not(:disabled) { background: rgba(0, 0, 0, 0.75); }
+.zoom-map {
+  position: absolute; left: 10px; bottom: 10px; width: 96px; aspect-ratio: var(--aspect, 1.7778);
+  border: 1px solid rgba(255, 255, 255, 0.6); background: rgba(0, 0, 0, 0.45); border-radius: 4px; pointer-events: none;
+}
+.zoom-map-view { position: absolute; border: 1.5px solid #fff; background: rgba(255, 255, 255, 0.22); }
+.zoom-status {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; max-width: calc(100% - 140px);
+  padding: 5px 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.65); color: #fff; font-size: 0.78rem;
+}
+.zoom-status:empty { display: none; }
+
 .regions { position: absolute; inset: 0; display: grid; pointer-events: none; }
 .region {
   position: relative;

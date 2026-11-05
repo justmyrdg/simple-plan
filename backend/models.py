@@ -32,6 +32,11 @@ class Area(Base):
     camera_label: Mapped[str] = mapped_column(String(120), default="")
     # network camera address (RTSP etc.); empty = frames come from a browser on the Monitor page
     camera_url: Mapped[str] = mapped_column(String(500), default="")
+    # saved zoom: the part of the frame the detector looks at, as fractions of the frame (see viewport.py)
+    view_x: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    view_y: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    view_w: Mapped[float] = mapped_column(Float, default=1.0, server_default="1")
+    view_h: Mapped[float] = mapped_column(Float, default=1.0, server_default="1")
 
     # latest detection, updated by /api/detect
     last_status: Mapped[str | None] = mapped_column(String(16), nullable=True)  # 'trash' | 'clean'

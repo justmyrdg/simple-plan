@@ -10,6 +10,11 @@ export interface Area {
   camera_enabled: boolean;
   camera_label: string;
   camera_url: string;
+  // saved zoom: the part of the camera frame the detector looks at, as fractions of the frame
+  view_x: number;
+  view_y: number;
+  view_w: number;
+  view_h: number;
   last_status: 'trash' | 'clean' | null;
   last_score: number | null;
   last_checked_at: string | null;
@@ -197,6 +202,8 @@ export class ApiService {
   area(id: number) { return this.http.get<Area>(`/api/areas/${id}`); }
   createArea(body: AreaInput) { return this.http.post<Area>('/api/areas', body); }
   updateArea(id: number, body: AreaInput) { return this.http.put<Area>(`/api/areas/${id}`, body); }
+  /** Save the zoom the detector uses for an area; 0, 0, 1, 1 is the whole frame. */
+  setView(id: number, v: { x: number; y: number; w: number; h: number }) { return this.http.put<Area>(`/api/areas/${id}/view`, v); }
   deleteArea(id: number) { return this.http.delete(`/api/areas/${id}`); }
 
   // contacts

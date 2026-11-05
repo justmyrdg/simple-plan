@@ -1,6 +1,6 @@
 import { Component, ElementRef, OnDestroy, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { DecimalPipe, PercentPipe } from '@angular/common';
+import { DecimalPipe, NgTemplateOutlet, PercentPipe } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
 import { DetectResult, DetectorService } from '../core/detector.service';
 import { ApiService, Area } from '../core/api.service';
@@ -31,9 +31,19 @@ export interface LogEntry {
 const MAX_TREND_POINTS = 120;
 const THUMB_WIDTH = 160;
 
+// zoom on the network camera: the visible part of the frame, as fractions (w = h, so the picture keeps its shape)
+interface View {
+  x: number;
+  y: number;
+  w: number;
+}
+const FULL_VIEW: View = { x: 0, y: 0, w: 1 };
+const MAX_ZOOM = 8; // keep in step with backend/viewport.py
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
 @Component({
   selector: 'app-monitor',
-  imports: [DecimalPipe, PercentPipe, ScoreGauge, TrendChart, MediaPanel],
+  imports: [DecimalPipe, NgTemplateOutlet, PercentPipe, ScoreGauge, TrendChart, MediaPanel],
   templateUrl: './monitor.html',
 })
 export class Monitor implements OnInit, OnDestroy {
@@ -50,6 +60,34 @@ export class Monitor implements OnInit, OnDestroy {
   protected readonly feed = signal<Feed>('device');
   // MJPEG preview of the network camera, shown in an <img>
   protected readonly streamUrl = signal<string | null>(null);
+
+  // ---- zoom (network camera) ----
+  // what is on screen now; "saved" is what the detector uses, kept on the area
+  protected readonly view = signal<View>(FULL_VIEW);
+  protected readonly frameAspect = signal(16 / 9);
+  protected readonly savingView = signal(false);
+  // after Save the shaded regions on screen are from the old view until the next result arrives
+  protected readonly regionsStale = signal(false);
+  protected readonly zoom = computed(() => 1 / this.view().w);
+  private readonly savedView = computed<View>(() => {
+    const a = this.area();
+    return a ? { x: a.view_x, y: a.view_y, w: a.view_w } : FULL_VIEW;
+  });
+  protected readonly savedZoomed = computed(() => this.savedView().w < 0.999);
+  protected readonly viewDirty = computed(() => {
+    const v = this.view(), s = this.savedView();
+    return Math.abs(v.x - s.x) > 0.002 || Math.abs(v.y - s.y) > 0.002 || Math.abs(v.w - s.w) > 0.002;
+  });
+  protected readonly zoomTransform = computed(() => {
+    const { x, y, w } = this.view();
+    return `scale(${1 / w}) translate(${-x * 100}%, ${-y * 100}%)`;
+  });
+  // the little map: where the visible part sits in the whole frame
+  protected readonly miniRect = computed(() => {
+    const { x, y, w } = this.view();
+    return { left: `${x * 100}%`, top: `${y * 100}%`, width: `${w * 100}%`, height: `${w * 100}%` };
+  });
+  private drag: { id: number; x: number; y: number } | null = null;
 
   // ---- global state ----
   protected readonly mode = signal<Mode>('live');
@@ -143,6 +181,7 @@ export class Monitor implements OnInit, OnDestroy {
       }
       this.areaId.set(cams.find((a) => a.id === saved)?.id ?? cams[0]?.id ?? null);
       this.feed.set(this.hasNetworkCam() ? 'network' : 'device');
+      this.view.set(this.savedView());
     });
     this.clock = setInterval(() => this.now.set(Date.now()), 1000);
   }
@@ -179,6 +218,7 @@ export class Monitor implements OnInit, OnDestroy {
     this.stopCamera();
     this.areaId.set(id);
     this.feed.set(this.hasNetworkCam() ? 'network' : 'device');
+    this.view.set(this.savedView());
     try {
       localStorage.setItem(AREA_KEY, String(id ?? ''));
     } catch {
@@ -205,6 +245,77 @@ export class Monitor implements OnInit, OnDestroy {
 
   protected onAlertAfter(e: Event) {
     this.alertAfter.set(+(e.target as HTMLSelectElement).value);
+  }
+
+  // ---- zoom: wheel / buttons to zoom, drag to move, Save to make the detector use it ----
+
+  /** Zoom by a factor, keeping the point (cx, cy) of the picture (0-1 across the visible part) where it is. */
+  protected zoomBy(factor: number, cx = 0.5, cy = 0.5) {
+    const v = this.view();
+    const w = clamp(v.w / factor, 1 / MAX_ZOOM, 1);
+    this.view.set(this.fit({ x: v.x + cx * v.w - cx * w, y: v.y + cy * v.w - cy * w, w }));
+  }
+
+  protected onWheel(e: WheelEvent) {
+    e.preventDefault();
+    const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    this.zoomBy(e.deltaY < 0 ? 1.2 : 1 / 1.2, (e.clientX - box.left) / box.width, (e.clientY - box.top) / box.height);
+  }
+
+  protected onDragStart(e: PointerEvent) {
+    if (e.button !== 0 || this.view().w >= 1) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  }
+
+  protected onDragMove(e: PointerEvent) {
+    if (!this.drag || this.drag.id !== e.pointerId) return;
+    const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const v = this.view();
+    // dragging the picture to the right shows what is further left
+    this.view.set(this.fit({
+      x: v.x - ((e.clientX - this.drag.x) / box.width) * v.w,
+      y: v.y - ((e.clientY - this.drag.y) / box.height) * v.w,
+      w: v.w,
+    }));
+    this.drag.x = e.clientX;
+    this.drag.y = e.clientY;
+  }
+
+  protected onDragEnd() {
+    this.drag = null;
+  }
+
+  /** Keep the view inside the frame. */
+  private fit(v: View): View {
+    return { x: clamp(v.x, 0, 1 - v.w), y: clamp(v.y, 0, 1 - v.w), w: v.w };
+  }
+
+  protected resetView() {
+    this.view.set(FULL_VIEW);
+  }
+
+  protected onFeedLoad(e: Event) {
+    const img = e.target as HTMLImageElement;
+    if (img.naturalWidth && img.naturalHeight) this.frameAspect.set(img.naturalWidth / img.naturalHeight);
+  }
+
+  protected saveView() {
+    const id = this.areaId();
+    const v = this.view();
+    if (id === null) return;
+    this.savingView.set(true);
+    this.areasApi.setView(id, { x: v.x, y: v.y, w: v.w, h: v.w }).subscribe({
+      next: (a) => {
+        this.cameraAreas.update((list) => list.map((x) => (x.id === a.id ? a : x)));
+        this.regionsStale.set(true);
+        this.savingView.set(false);
+      },
+      error: (e: HttpErrorResponse) => {
+        this.error.set(this.describeError(e));
+        this.savingView.set(false);
+      },
+    });
   }
 
   protected cellColor(score: number) {
@@ -354,6 +465,7 @@ export class Monitor implements OnInit, OnDestroy {
     this.backendOnline.set(true);
     this.error.set(null);
     this.result.set(r);
+    this.regionsStale.set(false);
     this.checks.update((n) => n + 1);
     this.trend.update((t) => [...t, { time: Date.now(), score: r.score }].slice(-MAX_TREND_POINTS));
     this.updateAlert(r);

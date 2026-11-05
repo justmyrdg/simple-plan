@@ -24,3 +24,6 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 .idea/
+
+# brainstorming mockups (local only)
+.superpowers/

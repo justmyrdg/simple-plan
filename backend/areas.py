@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from . import media
+from . import media, viewport
 from .auth import current_user
 from .db import get_db
 from .models import Area, Contact, Detection, Schedule, SmsLog
@@ -42,6 +42,11 @@ class AreaIn(BaseModel):
 class AreaOut(AreaIn):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    # saved zoom (fractions of the frame); set with PUT /areas/{id}/view, not with the area form
+    view_x: float = 0.0
+    view_y: float = 0.0
+    view_w: float = 1.0
+    view_h: float = 1.0
     last_status: str | None
     last_score: float | None
     last_checked_at: datetime | None
@@ -49,6 +54,19 @@ class AreaOut(AreaIn):
     contact_count: int = 0
     schedule_count: int = 0
     next_pickup: datetime | None = None
+
+
+class ViewIn(BaseModel):
+    x: float
+    y: float
+    w: float
+    h: float
+
+    @model_validator(mode="after")
+    def _check(self):
+        if not viewport.is_valid(self.x, self.y, self.w, self.h):
+            raise ValueError(f"the view must lie inside the frame and be at least 1/{viewport.MAX_ZOOM:g} of it in each direction")
+        return self
 
 
 class ContactIn(BaseModel):
@@ -186,6 +204,15 @@ def update_area(area_id: int, body: AreaIn, db: Session = Depends(get_db)):
     area = _area_or_404(db, area_id)
     for k, v in body.model_dump().items():
         setattr(area, k, v)
+    db.commit()
+    return area_out(db, area)
+
+
+@router.put("/areas/{area_id}/view", response_model=AreaOut)
+def set_view(area_id: int, body: ViewIn, db: Session = Depends(get_db)):
+    """Save the zoom the detector uses for this area (0, 0, 1, 1 = the whole frame)."""
+    area = _area_or_404(db, area_id)
+    area.view_x, area.view_y, area.view_w, area.view_h = body.x, body.y, body.w, body.h
     db.commit()
     return area_out(db, area)
 
