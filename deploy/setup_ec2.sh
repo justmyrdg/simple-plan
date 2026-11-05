@@ -219,9 +219,28 @@ systemctl restart trashwatch
 
 # ---------- nginx ----------
 step "Setting up nginx"
+# Without a domain there is no trusted certificate, but the browser's webcam still needs HTTPS: serve a
+# self-signed one (the browser shows a warning once; "Advanced > Proceed" is enough). With a domain, certbot
+# adds the real certificate below.
+TLS_LISTEN=""
+if [[ -z "$DOMAIN" ]]; then
+  step "Creating a self-signed HTTPS certificate"
+  token=$(curl -fs -m 2 -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 60" || true)
+  ip=$(curl -fs -m 2 -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/public-ipv4 || true)
+  if [[ ! -f /etc/nginx/selfsigned.crt ]]; then
+    mkdir -p /etc/nginx
+    openssl req -x509 -nodes -newkey rsa:2048 -days 825 -subj "/CN=${ip:-trashwatch}"       ${ip:+-addext "subjectAltName=IP:$ip"}       -keyout /etc/nginx/selfsigned.key -out /etc/nginx/selfsigned.crt
+    chmod 600 /etc/nginx/selfsigned.key
+  fi
+  TLS_LISTEN="    listen 443 ssl default_server;
+    ssl_certificate /etc/nginx/selfsigned.crt;
+    ssl_certificate_key /etc/nginx/selfsigned.key;"
+fi
+
 site=$(cat <<EOF
 server {
     listen 80 default_server;
+${TLS_LISTEN}
     server_name ${DOMAIN:-_};
 
     root $APP_DIR/frontend/dist/frontend/browser;
@@ -324,7 +343,7 @@ token=$(curl -fs -m 2 -X PUT http://169.254.169.254/latest/api/token -H "X-aws-e
 public_ip=$(curl -fs -m 2 -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/public-ipv4 || true)
 echo
 echo "TrashWatch is running."
-if [[ -n "$DOMAIN" ]]; then echo "  Website: https://$DOMAIN"; else echo "  Website: http://${public_ip:-<server public IP>}"; fi
+if [[ -n "$DOMAIN" ]]; then echo "  Website: https://$DOMAIN"; else echo "  Website: https://${public_ip:-<server public IP>}  (self-signed: the browser warns once; the webcam needs this https:// address)"; fi
 if [[ -f /root/trashwatch-admin-password.txt ]]; then
   echo "  First login: admin / $(cut -d= -f2 /root/trashwatch-admin-password.txt)   (change it after logging in)"
   rm -f /root/trashwatch-admin-password.txt
