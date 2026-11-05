@@ -98,6 +98,7 @@
             @if (streamUrl(); as url) {
               <!-- network camera: zoom with the wheel or buttons, drag to move; Save makes the detector use this view -->
               <div class="zoom-box" [class.zoom-box-zoomed]="zoom() > 1" [style.--aspect]="frameAspect()"
+                   tabindex="0" aria-label="Camera picture. Arrow keys move, plus and minus zoom, 0 resets." (keydown)="onKey($event)"
                    (wheel)="onWheel($event)" (pointerdown)="onDragStart($event)" (pointermove)="onDragMove($event)"
                    (pointerup)="onDragEnd()" (pointercancel)="onDragEnd()">
                 <img #feedImg class="zoom-img" [src]="url" [style.transform]="zoomTransform()" alt="Network camera feed"
@@ -116,6 +117,22 @@
                   <button class="btn" (click)="resetView()" [disabled]="zoom() <= 1" title="Show the whole picture" aria-label="Reset zoom">
                     <svg class="icon"><use href="#i-refresh" /></svg>
                   </button>
+                  @if (zoom() > 1) {
+                    <div class="zoom-pad" role="group" aria-label="Move the view">
+                      <button class="btn pad-up" (click)="pan(0, -1)" [disabled]="!canPan().up" title="Move up" aria-label="Move up">
+                        <svg class="icon"><use href="#i-arrow-up" /></svg>
+                      </button>
+                      <button class="btn pad-left" (click)="pan(-1, 0)" [disabled]="!canPan().left" title="Move left" aria-label="Move left">
+                        <svg class="icon"><use href="#i-arrow-left" /></svg>
+                      </button>
+                      <button class="btn pad-right" (click)="pan(1, 0)" [disabled]="!canPan().right" title="Move right" aria-label="Move right">
+                        <svg class="icon"><use href="#i-arrow-right" /></svg>
+                      </button>
+                      <button class="btn pad-down" (click)="pan(0, 1)" [disabled]="!canPan().down" title="Move down" aria-label="Move down">
+                        <svg class="icon"><use href="#i-arrow-down" /></svg>
+                      </button>
+                    </div>
+                  }
                 </div>
                 @if (zoom() > 1) {
                   <div class="zoom-map" aria-hidden="true"><div class="zoom-map-view" [style.left]="miniRect().left" [style.top]="miniRect().top"

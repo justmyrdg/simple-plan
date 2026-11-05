@@ -205,6 +205,17 @@ h3 { margin: 0; font-size: 0.95rem; font-weight: 700; }
 .zoom-controls { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 6px; }
 .zoom-controls .btn { width: 34px; height: 34px; padding: 0; justify-content: center; background: rgba(0, 0, 0, 0.55); border-color: rgba(255, 255, 255, 0.25); color: #fff; }
 .zoom-controls .btn:hover:not(:disabled) { background: rgba(0, 0, 0, 0.75); }
+/* up / left / right / down in a plus shape */
+.zoom-pad {
+  display: grid; grid-template-columns: repeat(3, 34px); grid-template-rows: repeat(3, 34px); gap: 4px;
+  margin-top: 6px; align-self: flex-end;
+}
+.zoom-pad .btn { width: 34px; height: 34px; }
+.zoom-pad .pad-up { grid-area: 1 / 2; }
+.zoom-pad .pad-left { grid-area: 2 / 1; }
+.zoom-pad .pad-right { grid-area: 2 / 3; }
+.zoom-pad .pad-down { grid-area: 3 / 2; }
+.zoom-box:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .zoom-map {
   position: absolute; left: 10px; bottom: 10px; width: 96px; aspect-ratio: var(--aspect, 1.7778);
   border: 1px solid rgba(255, 255, 255, 0.6); background: rgba(0, 0, 0, 0.45); border-radius: 4px; pointer-events: none;

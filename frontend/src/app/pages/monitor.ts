@@ -262,6 +262,37 @@ export class Monitor implements OnInit, OnDestroy {
     this.zoomBy(e.deltaY < 0 ? 1.2 : 1 / 1.2, (e.clientX - box.left) / box.width, (e.clientY - box.top) / box.height);
   }
 
+  /** Move the view by a fraction of what is visible, e.g. pan(1, 0) shows what is to the right. */
+  protected pan(dx: number, dy: number) {
+    const v = this.view();
+    const step = 0.25 * v.w;
+    this.view.set(this.fit({ x: v.x + dx * step, y: v.y + dy * step, w: v.w }));
+  }
+
+  // can the view still move that way? (disables the arrow at the edge of the frame)
+  protected readonly canPan = computed(() => {
+    const { x, y, w } = this.view();
+    const e = 0.0005;
+    return { left: x > e, right: x + w < 1 - e, up: y > e, down: y + w < 1 - e };
+  });
+
+  protected onKey(e: KeyboardEvent) {
+    const moves: Record<string, () => void> = {
+      ArrowLeft: () => this.pan(-1, 0),
+      ArrowRight: () => this.pan(1, 0),
+      ArrowUp: () => this.pan(0, -1),
+      ArrowDown: () => this.pan(0, 1),
+      '+': () => this.zoomBy(1.4),
+      '=': () => this.zoomBy(1.4),
+      '-': () => this.zoomBy(1 / 1.4),
+      '0': () => this.resetView(),
+    };
+    const move = moves[e.key];
+    if (!move || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    move();
+  }
+
   protected onDragStart(e: PointerEvent) {
     if (e.button !== 0 || this.view().w >= 1) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
