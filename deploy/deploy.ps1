@@ -48,7 +48,7 @@ try {
   }
   if (-not (Test-Path "frontend\dist\frontend\browser\index.html")) { throw "No website build found. Run without -SkipBuild." }
 
-  $items = @("backend", "trash_detector.py", "trash_head.pt", "requirements.txt", "frontend/dist/frontend/browser")
+  $items = @("backend", "trash_detector.py", "trash_head.pt", "requirements.txt", "deploy/set_env.py", "frontend/dist/frontend/browser")
   if ($IncludeDatabase) {
     if (-not (Test-Path "backend\trashwatch.db")) { throw "backend\trashwatch.db not found" }
     Copy-Item "backend\trashwatch.db" $uploadedDb -Force

@@ -128,7 +128,7 @@ else
   # same files the git repo has; local databases/secrets in the clone are never copied
   tar -C "$SRC_DIR" -cf - --exclude=.git --exclude=Images --exclude=node_modules --exclude=dist --exclude=.angular \
       --exclude=__pycache__ --exclude='backend/*.db' --exclude=backend/.env --exclude=backend/.jwt_secret \
-      backend frontend trash_detector.py trash_head.pt requirements.txt \
+      backend frontend trash_detector.py trash_head.pt requirements.txt deploy/set_env.py \
     | tar -C "$APP_DIR" -xf -
   # a database copied into the clone by hand (see deploy/README.md)
   if [[ -f "$SRC_DIR/backend/trashwatch.uploaded.db" ]]; then
@@ -188,6 +188,7 @@ pip=("$APP_DIR/venv/bin/pip" install -q --no-cache-dir)
 sed 's/^opencv-python$/opencv-python-headless/' "$APP_DIR/requirements.txt" > "$TMPDIR/requirements.txt"
 "${pip[@]}" -r "$TMPDIR/requirements.txt"
 rm -rf "$TMPDIR"
+unset TMPDIR   # the folder is gone; later dnf/pip runs (certbot) would fail trying to use it
 
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 chmod 600 "$APP_DIR/backend/.env"
@@ -237,9 +238,23 @@ if [[ -z "$DOMAIN" ]]; then
     ssl_certificate_key /etc/nginx/selfsigned.key;"
 fi
 
-site=$(cat <<EOF
-server {
+# With a domain, anyone who opens the server by its bare IP address (http://<ip>) is sent to the domain
+LISTEN80="listen 80 default_server;"
+CATCH_ALL=""
+if [[ -n "$DOMAIN" ]]; then
+  LISTEN80="listen 80;"
+  CATCH_ALL="server {
     listen 80 default_server;
+    server_name _;
+    return 301 https://$DOMAIN\$request_uri;
+}
+"
+fi
+
+site=$(cat <<EOF
+${CATCH_ALL}
+server {
+    ${LISTEN80}
 ${TLS_LISTEN}
     server_name ${DOMAIN:-_};
 
