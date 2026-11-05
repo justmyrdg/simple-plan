@@ -69,10 +69,11 @@ def send_due_reminders(db: Session, now: datetime | None = None) -> int:
     for s in schedules:
         area = s.area.name
         window_end = now + timedelta(minutes=s.notify_minutes_before)
-        for pickup in occurrences(s, now, window_end):
-            sent += _text_contacts(db, s, pickup, "reminder", lambda c, p=pickup: reminder_text(
-                c.language, area, p, now, s.truck, s.notes))
-        if s.notify_at_pickup:
+        if s.notify_minutes_before > 0:  # 0 = no reminder before, only the pickup-time text
+            for pickup in occurrences(s, now, window_end):
+                sent += _text_contacts(db, s, pickup, "reminder", lambda c, p=pickup: reminder_text(
+                    c.language, area, p, now, s.truck, s.notes))
+        if s.notify_at_pickup or s.notify_minutes_before == 0:
             for pickup in occurrences(s, now - AT_PICKUP_GRACE, now):
                 sent += _text_contacts(db, s, pickup, "at_pickup", lambda c, p=pickup: at_pickup_text(
                     c.language, area, p, s.truck, s.notes))

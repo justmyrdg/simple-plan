@@ -230,11 +230,27 @@ export class Monitor implements OnInit, OnDestroy {
       this.startNetworkCamera();
       return;
     }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      this.error.set(
+        window.isSecureContext
+          ? 'This browser cannot use a webcam.'
+          : 'Browsers only allow the webcam on HTTPS or localhost. Open this site with https:// (see deploy/README.md, section 3), or use a network camera.',
+      );
+      return;
+    }
     try {
-      const video: MediaTrackConstraints = this.cameraId()
-        ? { deviceId: { exact: this.cameraId() }, width: 1280, height: 720 }
-        : { width: 1280, height: 720 };
-      this.stream = await navigator.mediaDevices.getUserMedia({ video });
+      const wanted: MediaTrackConstraints = { width: 1280, height: 720 };
+      try {
+        this.stream = await navigator.mediaDevices.getUserMedia({
+          video: this.cameraId() ? { ...wanted, deviceId: { exact: this.cameraId() } } : wanted,
+        });
+      } catch (e) {
+        // a remembered camera that is unplugged, or a size it can't do: retry with any camera
+        const name = (e as DOMException).name;
+        if (name !== 'OverconstrainedError' && name !== 'NotFoundError') throw e;
+        this.cameraId.set('');
+        this.stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
       // device labels are only available after permission is granted
       const devices = await navigator.mediaDevices.enumerateDevices();
       this.cameras.set(devices.filter((d) => d.kind === 'videoinput'));
@@ -250,8 +266,22 @@ export class Monitor implements OnInit, OnDestroy {
         v.play();
         this.captureLoop();
       });
-    } catch {
-      this.error.set('Could not open the camera. Allow camera access in your browser and try again.');
+    } catch (e) {
+      this.error.set(this.cameraErrorMessage((e as DOMException).name));
+    }
+  }
+
+  private cameraErrorMessage(name: string): string {
+    switch (name) {
+      case 'NotAllowedError':
+      case 'SecurityError':
+        return 'Camera access is blocked. Click the lock icon in the address bar, allow the camera, and try again.';
+      case 'NotFoundError':
+        return 'No webcam was found on this device.';
+      case 'NotReadableError':
+        return 'The webcam is in use by another app or browser tab. Close it and try again.';
+      default:
+        return 'Could not open the camera. Allow camera access in your browser and try again.';
     }
   }
 
