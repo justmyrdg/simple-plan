@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { DecimalPipe, NgTemplateOutlet, PercentPipe } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
@@ -10,6 +10,23 @@ import { TrendChart, TrendPoint } from '../shared/trend-chart';
 import { MediaPanel } from '../shared/media-panel';
 
 const AREA_KEY = 'tw_monitor_area';
+// sensitivity threshold, region grid and the overlay toggle, remembered in this browser between visits
+const SETTINGS_KEY = 'tw_monitor_settings';
+const GRID_SIZES = [0, 2, 3, 4]; // the options of the Region grid select
+
+function loadSettings(): { threshold: number; grid: number; showRegions: boolean } {
+  const defaults = { threshold: 0.5, grid: 3, showRegions: true };
+  try {
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}');
+    return {
+      threshold: typeof s.threshold === 'number' && s.threshold >= 0.1 && s.threshold <= 0.9 ? s.threshold : defaults.threshold,
+      grid: GRID_SIZES.includes(s.grid) ? s.grid : defaults.grid,
+      showRegions: typeof s.showRegions === 'boolean' ? s.showRegions : defaults.showRegions,
+    };
+  } catch {
+    return defaults; // storage unavailable or damaged
+  }
+}
 
 type Mode = 'live' | 'upload';
 // 'device' = a camera on this computer/phone; 'network' = the area's IP camera, read by the server
@@ -90,9 +107,19 @@ export class Monitor implements OnInit, OnDestroy {
 
   // ---- global state ----
   protected readonly mode = signal<Mode>('live');
-  protected readonly threshold = signal(0.5);
-  protected readonly grid = signal(3);
-  protected readonly showRegions = signal(true);
+  private readonly saved = loadSettings();
+  protected readonly threshold = signal(this.saved.threshold);
+  protected readonly grid = signal(this.saved.grid);
+  protected readonly showRegions = signal(this.saved.showRegions);
+  // keep them for the next visit
+  private readonly rememberSettings = effect(() => {
+    const settings = { threshold: this.threshold(), grid: this.grid(), showRegions: this.showRegions() };
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    } catch {
+      /* storage unavailable */
+    }
+  });
   protected readonly modelType = signal<string | null>(null);
   protected readonly backendOnline = signal<boolean | null>(null);
   protected readonly error = signal<string | null>(null);

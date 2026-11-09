@@ -21,7 +21,8 @@ param(
   [string] $Domain = "",
   [string] $Email = "",
   [switch] $IncludeDatabase,
-  [switch] $SkipBuild
+  [switch] $SkipBuild,
+  [switch] $Force                                       # rebuild the website and redo every server step, even if nothing changed
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,9 +43,28 @@ Push-Location $root
 $uploadedDb = Join-Path $root "backend\trashwatch.uploaded.db"
 try {
   if (-not $SkipBuild) {
-    Step "Building the website"
-    Push-Location frontend
-    try { & npx.cmd ng build; Check "Website build" } finally { Pop-Location }
+    # fingerprint of the frontend sources (what git tracks plus new files git doesn't ignore);
+    # the build is skipped when it matches the one the existing build was made from
+    $stamp = "frontend\dist\.source-hash"
+    $srcHash = ""
+    try {
+      $lines = & git ls-files --cached --others --exclude-standard -- frontend | Where-Object { Test-Path $_ -PathType Leaf } |
+        Sort-Object | ForEach-Object { "$_ " + (Get-FileHash $_ -Algorithm SHA256).Hash }
+      if ($lines) {
+        $bytes = [Text.Encoding]::UTF8.GetBytes(($lines -join "`n"))
+        $srcHash = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($bytes))
+      }
+    } catch { $srcHash = "" }
+    $upToDate = (-not $Force) -and $srcHash -and (Test-Path $stamp) -and
+      (Test-Path "frontend\dist\frontend\browser\index.html") -and ((Get-Content $stamp -Raw).Trim() -eq $srcHash)
+    if ($upToDate) {
+      Step "Website unchanged since the last build, skipping the build"
+    } else {
+      Step "Building the website"
+      Push-Location frontend
+      try { & npx.cmd ng build; Check "Website build" } finally { Pop-Location }
+      if ($srcHash) { Set-Content $stamp $srcHash -Encoding ascii }
+    }
   }
   if (-not (Test-Path "frontend\dist\frontend\browser\index.html")) { throw "No website build found. Run without -SkipBuild." }
 
@@ -68,7 +88,8 @@ try {
   Check "Upload (check the IP, the key file, and that port 22 is open in the security group)"
 
   Step "Setting up the server"
-  $remote = "sed -i 's/\r$//' /tmp/setup_ec2.sh && sudo bash /tmp/setup_ec2.sh --archive /tmp/trashwatch.tar.gz '$Domain' '$Email'"
+  $forceEnv = if ($Force) { "env FORCE=1 " } else { "" }   # FORCE=1 makes the server redo every step
+  $remote = "sed -i 's/\r$//' /tmp/setup_ec2.sh && sudo ${forceEnv}bash /tmp/setup_ec2.sh --archive /tmp/trashwatch.tar.gz '$Domain' '$Email'"
   & ssh @sshOpts -t $target $remote
   Check "Server setup"
 }

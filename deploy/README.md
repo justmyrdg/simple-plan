@@ -10,6 +10,18 @@ Two scripts do the work:
 Run `deploy.ps1` again any time to update the server. The server's database, settings (`.env`)
 and login secret are never overwritten.
 
+Updates only redo what changed (each step prints "unchanged, skipping"):
+
+| Step | Skipped when |
+|---|---|
+| Website build (on your laptop with `deploy.ps1`, on the server with a git clone) | the frontend files are the same as in the last build |
+| Installing Python packages | `requirements.txt` is the same |
+| Restarting the backend | the backend code, `trash_detector.py`, `trash_head.pt`, `requirements.txt` and the service file are the same (the database, `.env` and captures don't count) |
+
+So a frontend-only change doesn't restart the backend, and a backend-only change doesn't rebuild the website.
+To redo everything anyway, use `deploy.ps1 -Force`, or on the server `sudo FORCE=1 bash deploy/setup_ec2.sh`.
+(The fingerprints are kept on the server in `/opt/trashwatch/.deployed/`.)
+
 ## 1. Create the EC2 instance (once)
 
 In the AWS console, go to **EC2 → Launch instance**:

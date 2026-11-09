@@ -17,6 +17,9 @@
 #   - installs the Python packages in a virtualenv (CPU-only PyTorch, much smaller than the default)
 #   - runs the backend as the systemd service "trashwatch" (starts on boot, restarts if it crashes)
 #   - serves the website with nginx and forwards /api to the backend
+#   - on later runs skips what didn't change: the website build (clone mode), the Python packages
+#     (requirements.txt) and the backend restart (code, model, packages, service file).
+#     Run with FORCE=1 (sudo FORCE=1 bash deploy/setup_ec2.sh) to redo everything.
 set -euo pipefail
 
 ARCHIVE=""
@@ -120,6 +123,20 @@ step "Copying the app into $APP_DIR"
 id "$APP_USER" &>/dev/null || useradd --system --home-dir "$APP_DIR" --shell "$(command -v nologin)" "$APP_USER"
 mkdir -p "$APP_DIR"
 chmod 755 "$APP_DIR"
+
+# Fingerprints of what the last run installed, so an update only redoes what actually changed
+# (website build, Python packages, backend restart). FORCE=1 redoes everything.
+STAMP_DIR="$APP_DIR/.deployed"
+mkdir -p "$STAMP_DIR"
+# tree_hash <dir> [find tests...]: one hash over the names and contents of the files in <dir>
+tree_hash() {
+  local dir="$1"; shift
+  (cd "$dir" && find . -type f "$@" -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
+}
+# changed <name> <hash>: true when <name> was never done, FORCE=1, or its hash differs from the saved one
+changed() { [[ "${FORCE:-}" == 1 || ! -f "$STAMP_DIR/$1" || "$(cat "$STAMP_DIR/$1")" != "$2" ]]; }
+saved() { echo "$2" > "$STAMP_DIR/$1"; }
+
 if [[ -n "$ARCHIVE" ]]; then
   # the archive never contains trashwatch.db, .env or .jwt_secret, so the server's copies survive updates
   tar -xzf "$ARCHIVE" -C "$APP_DIR"
@@ -158,35 +175,48 @@ fi
 
 # ---------- website ----------
 if [[ -z "$ARCHIVE" ]]; then
-  step "Building the website (first time takes a few minutes)"
-  if ! node -v 2>/dev/null | grep -q "^v$NODE_MAJOR\."; then
-    # official Node.js build; distro packages are often too old for Angular
-    arch=$(uname -m); [[ $arch == aarch64 ]] && arch=arm64; [[ $arch == x86_64 ]] && arch=x64
-    base="https://nodejs.org/dist/latest-v$NODE_MAJOR.x"
-    file=$(curl -fsSL "$base/SHASUMS256.txt" | awk -v a="linux-$arch.tar.xz" '$2 ~ a"$" {print $2}')
-    curl -fsSL "$base/$file" | tar -xJ -C /usr/local --strip-components=1
+  # the sources just copied from the clone (the build output and node_modules don't count)
+  fe_hash=$(tree_hash "$APP_DIR/frontend" ! -path './node_modules/*' ! -path './dist/*' ! -path './.angular/*')
+  if [[ -f "$APP_DIR/frontend/dist/frontend/browser/index.html" ]] && ! changed frontend "$fe_hash"; then
+    step "Website unchanged, skipping the build"
+  else
+    step "Building the website (first time takes a few minutes)"
+    if ! node -v 2>/dev/null | grep -q "^v$NODE_MAJOR\."; then
+      # official Node.js build; distro packages are often too old for Angular
+      arch=$(uname -m); [[ $arch == aarch64 ]] && arch=arm64; [[ $arch == x86_64 ]] && arch=x64
+      base="https://nodejs.org/dist/latest-v$NODE_MAJOR.x"
+      file=$(curl -fsSL "$base/SHASUMS256.txt" | awk -v a="linux-$arch.tar.xz" '$2 ~ a"$" {print $2}')
+      curl -fsSL "$base/$file" | tar -xJ -C /usr/local --strip-components=1
+    fi
+    echo "Node $(node -v)"
+    # npm install, not npm ci: the lock file comes from Windows and lacks some Linux-only
+    # optional packages, which npm ci refuses; this only touches the copy in $APP_DIR
+    (cd "$APP_DIR/frontend" && npm install --no-audit --no-fund --no-update-notifier --loglevel=error && npx ng build)
+    # only the built files are needed; free ~500 MB
+    rm -rf "$APP_DIR/frontend/node_modules" "$APP_DIR/frontend/.angular"
+    npm cache clean --force --loglevel=error
+    saved frontend "$fe_hash"
   fi
-  echo "Node $(node -v)"
-  # npm install, not npm ci: the lock file comes from Windows and lacks some Linux-only
-  # optional packages, which npm ci refuses; this only touches the copy in $APP_DIR
-  (cd "$APP_DIR/frontend" && npm install --no-audit --no-fund --no-update-notifier --loglevel=error && npx ng build)
-  # only the built files are needed; free ~500 MB
-  rm -rf "$APP_DIR/frontend/node_modules" "$APP_DIR/frontend/.angular"
-  npm cache clean --force --loglevel=error
 fi
 [[ -f "$APP_DIR/frontend/dist/frontend/browser/index.html" ]] || { echo "Website build missing." >&2; exit 1; }
 
 # ---------- python ----------
-step "Installing Python packages (first time takes a few minutes)"
-# packages (~1.5 GB) plus the AI model download (~0.6 GB), with some room to spare
-[[ -x "$APP_DIR/venv/bin/uvicorn" ]] || (( $(free_mb) >= 3000 )) || disk_help 3000
-[[ -d "$APP_DIR/venv" ]] || $PY -m venv "$APP_DIR/venv"
-pip=("$APP_DIR/venv/bin/pip" install -q --no-cache-dir)
-"${pip[@]}" --upgrade pip
-"${pip[@]}" torch --index-url https://download.pytorch.org/whl/cpu
-# the server has no screen, so use the headless OpenCV build
-sed 's/^opencv-python$/opencv-python-headless/' "$APP_DIR/requirements.txt" > "$TMPDIR/requirements.txt"
-"${pip[@]}" -r "$TMPDIR/requirements.txt"
+req_hash=$(sha256sum "$APP_DIR/requirements.txt" | cut -d' ' -f1)
+if [[ -x "$APP_DIR/venv/bin/uvicorn" ]] && ! changed python "$req_hash"; then
+  step "Python packages unchanged (requirements.txt is the same), skipping"
+else
+  step "Installing Python packages (first time takes a few minutes)"
+  # packages (~1.5 GB) plus the AI model download (~0.6 GB), with some room to spare
+  [[ -x "$APP_DIR/venv/bin/uvicorn" ]] || (( $(free_mb) >= 3000 )) || disk_help 3000
+  [[ -d "$APP_DIR/venv" ]] || $PY -m venv "$APP_DIR/venv"
+  pip=("$APP_DIR/venv/bin/pip" install -q --no-cache-dir)
+  "${pip[@]}" --upgrade pip
+  "${pip[@]}" torch --index-url https://download.pytorch.org/whl/cpu
+  # the server has no screen, so use the headless OpenCV build
+  sed 's/^opencv-python$/opencv-python-headless/' "$APP_DIR/requirements.txt" > "$TMPDIR/requirements.txt"
+  "${pip[@]}" -r "$TMPDIR/requirements.txt"
+  saved python "$req_hash"
+fi
 rm -rf "$TMPDIR"
 unset TMPDIR   # the folder is gone; later dnf/pip runs (certbot) would fail trying to use it
 
@@ -216,7 +246,18 @@ WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
 systemctl enable -q trashwatch
-systemctl restart trashwatch
+# Restarting reloads the AI model and cuts any recording in progress, so only do it when the code,
+# the trained model, the packages or the service file changed. (Server data and settings don't count.)
+be_hash=$({
+  tree_hash "$APP_DIR/backend" ! -path './captures/*' ! -path '*/__pycache__/*' ! -name '*.db*' ! -name .env ! -name .jwt_secret
+  sha256sum "$APP_DIR/trash_detector.py" "$APP_DIR/trash_head.pt" "$APP_DIR/requirements.txt" /etc/systemd/system/trashwatch.service
+} | sha256sum | cut -d' ' -f1)
+if systemctl is-active -q trashwatch && ! changed backend "$be_hash"; then
+  echo "Backend unchanged, not restarting it."
+else
+  systemctl restart trashwatch
+  saved backend "$be_hash"
+fi
 
 # ---------- nginx ----------
 step "Setting up nginx"
