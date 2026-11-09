@@ -87,7 +87,6 @@ export class Monitor implements OnInit, OnDestroy {
     const { x, y, w } = this.view();
     return { left: `${x * 100}%`, top: `${y * 100}%`, width: `${w * 100}%`, height: `${w * 100}%` };
   });
-  private drag: { id: number; x: number; y: number } | null = null;
 
   // ---- global state ----
   protected readonly mode = signal<Mode>('live');
@@ -247,7 +246,7 @@ export class Monitor implements OnInit, OnDestroy {
     this.alertAfter.set(+(e.target as HTMLSelectElement).value);
   }
 
-  // ---- zoom: wheel / buttons to zoom, drag to move, Save to make the detector use it ----
+  // ---- zoom: only the on-screen buttons zoom and move, Save to make the detector use it. No wheel, pinch, drag or keys. ----
 
   /** Zoom by a factor, keeping the point (cx, cy) of the picture (0-1 across the visible part) where it is. */
   protected zoomBy(factor: number, cx = 0.5, cy = 0.5) {
@@ -256,10 +255,10 @@ export class Monitor implements OnInit, OnDestroy {
     this.view.set(this.fit({ x: v.x + cx * v.w - cx * w, y: v.y + cy * v.w - cy * w, w }));
   }
 
+  /** The picture is not zoomed with the wheel or a trackpad pinch (that arrives as Ctrl + wheel); only the buttons do it.
+   *  Swallow Ctrl + wheel so a pinch over the picture doesn't zoom the whole page either. */
   protected onWheel(e: WheelEvent) {
-    e.preventDefault();
-    const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    this.zoomBy(e.deltaY < 0 ? 1.2 : 1 / 1.2, (e.clientX - box.left) / box.width, (e.clientY - box.top) / box.height);
+    if (e.ctrlKey) e.preventDefault();
   }
 
   /** Move the view by a fraction of what is visible, e.g. pan(1, 0) shows what is to the right. */
@@ -275,47 +274,6 @@ export class Monitor implements OnInit, OnDestroy {
     const e = 0.0005;
     return { left: x > e, right: x + w < 1 - e, up: y > e, down: y + w < 1 - e };
   });
-
-  protected onKey(e: KeyboardEvent) {
-    const moves: Record<string, () => void> = {
-      ArrowLeft: () => this.pan(-1, 0),
-      ArrowRight: () => this.pan(1, 0),
-      ArrowUp: () => this.pan(0, -1),
-      ArrowDown: () => this.pan(0, 1),
-      '+': () => this.zoomBy(1.4),
-      '=': () => this.zoomBy(1.4),
-      '-': () => this.zoomBy(1 / 1.4),
-      '0': () => this.resetView(),
-    };
-    const move = moves[e.key];
-    if (!move || e.ctrlKey || e.metaKey || e.altKey) return;
-    e.preventDefault();
-    move();
-  }
-
-  protected onDragStart(e: PointerEvent) {
-    if (e.button !== 0 || this.view().w >= 1) return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
-  }
-
-  protected onDragMove(e: PointerEvent) {
-    if (!this.drag || this.drag.id !== e.pointerId) return;
-    const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const v = this.view();
-    // dragging the picture to the right shows what is further left
-    this.view.set(this.fit({
-      x: v.x - ((e.clientX - this.drag.x) / box.width) * v.w,
-      y: v.y - ((e.clientY - this.drag.y) / box.height) * v.w,
-      w: v.w,
-    }));
-    this.drag.x = e.clientX;
-    this.drag.y = e.clientY;
-  }
-
-  protected onDragEnd() {
-    this.drag = null;
-  }
 
   /** Keep the view inside the frame. */
   private fit(v: View): View {

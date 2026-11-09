@@ -96,18 +96,15 @@
           </ng-template>
           <div class="media-wrap">
             @if (streamUrl(); as url) {
-              <!-- network camera: zoom with the wheel or buttons, drag to move; Save makes the detector use this view -->
-              <div class="zoom-box" [class.zoom-box-zoomed]="zoom() > 1" [style.--aspect]="frameAspect()"
-                   tabindex="0" aria-label="Camera picture. Arrow keys move, plus and minus zoom, 0 resets." (keydown)="onKey($event)"
-                   (wheel)="onWheel($event)" (pointerdown)="onDragStart($event)" (pointermove)="onDragMove($event)"
-                   (pointerup)="onDragEnd()" (pointercancel)="onDragEnd()">
+              <!-- network camera: zoom and move with the buttons only (no wheel, pinch, drag or keys); Save makes the detector use this view -->
+              <div class="zoom-box" [style.--aspect]="frameAspect()" (wheel)="onWheel($event)">
                 <img #feedImg class="zoom-img" [src]="url" [style.transform]="zoomTransform()" alt="Network camera feed"
                      draggable="false" (error)="onFeedError()" (load)="onFeedLoad($event)" />
                 <!-- the shaded regions describe the saved view, so hide them while the view has unsaved changes -->
                 @if (!viewDirty() && !regionsStale()) {
                   <ng-container *ngTemplateOutlet="regionsTpl" />
                 }
-                <div class="zoom-controls" (pointerdown)="$event.stopPropagation()" (wheel)="$event.stopPropagation()">
+                <div class="zoom-controls">
                   <button class="btn" (click)="zoomBy(1.4)" [disabled]="zoom() >= 8" title="Zoom in" aria-label="Zoom in">
                     <svg class="icon"><use href="#i-plus" /></svg>
                   </button>
@@ -138,7 +135,7 @@
                   <div class="zoom-map" aria-hidden="true"><div class="zoom-map-view" [style.left]="miniRect().left" [style.top]="miniRect().top"
                        [style.width]="miniRect().width" [style.height]="miniRect().height"></div></div>
                 }
-                <div class="zoom-status" (pointerdown)="$event.stopPropagation()">
+                <div class="zoom-status">
                   @if (viewDirty()) {
                     <span>{{ zoom() | number: '1.1-1' }}× · not saved, the detector still uses the saved view</span>
                     <button class="btn btn-primary btn-sm" (click)="saveView()" [disabled]="savingView()">

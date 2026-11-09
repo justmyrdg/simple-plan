@@ -197,10 +197,8 @@ h3 { margin: 0; font-size: 0.95rem; font-weight: 700; }
 .zoom-box {
   position: relative; overflow: hidden; margin: 0 auto;
   width: min(100%, calc(70vh * var(--aspect, 1.7778))); aspect-ratio: var(--aspect, 1.7778);
-  touch-action: none; user-select: none;
+  touch-action: pan-x pan-y; user-select: none; /* scrolling still works, a two-finger pinch does not zoom */
 }
-.zoom-box-zoomed { cursor: grab; }
-.zoom-box-zoomed:active { cursor: grabbing; }
 .zoom-img { display: block; width: 100%; height: 100%; transform-origin: 0 0; pointer-events: none; }
 .zoom-controls { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 6px; }
 .zoom-controls .btn { width: 34px; height: 34px; padding: 0; justify-content: center; background: rgba(0, 0, 0, 0.55); border-color: rgba(255, 255, 255, 0.25); color: #fff; }
@@ -215,7 +213,6 @@ h3 { margin: 0; font-size: 0.95rem; font-weight: 700; }
 .zoom-pad .pad-left { grid-area: 2 / 1; }
 .zoom-pad .pad-right { grid-area: 2 / 3; }
 .zoom-pad .pad-down { grid-area: 3 / 2; }
-.zoom-box:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .zoom-map {
   position: absolute; left: 10px; bottom: 10px; width: 96px; aspect-ratio: var(--aspect, 1.7778);
   border: 1px solid rgba(255, 255, 255, 0.6); background: rgba(0, 0, 0, 0.45); border-radius: 4px; pointer-events: none;
