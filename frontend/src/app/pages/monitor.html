@@ -97,13 +97,20 @@
           <div class="media-wrap">
             @if (streamUrl(); as url) {
               <!-- network camera: zoom and move with the buttons only (no wheel, pinch, drag or keys); Save makes the detector use this view -->
-              <div class="zoom-box" [style.--aspect]="frameAspect()" (wheel)="onWheel($event)">
+              <div class="zoom-wrap" [style.--aspect]="frameAspect()" (wheel)="onWheel($event)">
+               <div class="zoom-box">
                 <img #feedImg class="zoom-img" [src]="url" [style.transform]="zoomTransform()" alt="Network camera feed"
                      draggable="false" (error)="onFeedError()" (load)="onFeedLoad($event)" />
                 <!-- the shaded regions describe the saved view, so hide them while the view has unsaved changes -->
                 @if (!viewDirty() && !regionsStale()) {
                   <ng-container *ngTemplateOutlet="regionsTpl" />
                 }
+                @if (zoom() > 1) {
+                  <div class="zoom-map" aria-hidden="true"><div class="zoom-map-view" [style.left]="miniRect().left" [style.top]="miniRect().top"
+                       [style.width]="miniRect().width" [style.height]="miniRect().height"></div></div>
+                }
+               </div>
+               <!-- on a phone the buttons sit under the picture instead of over it -->
                 <div class="zoom-controls">
                   <button class="btn" (click)="zoomBy(1.4)" [disabled]="zoom() >= 8" title="Zoom in" aria-label="Zoom in">
                     <svg class="icon"><use href="#i-plus" /></svg>
@@ -131,10 +138,6 @@
                     </div>
                   }
                 </div>
-                @if (zoom() > 1) {
-                  <div class="zoom-map" aria-hidden="true"><div class="zoom-map-view" [style.left]="miniRect().left" [style.top]="miniRect().top"
-                       [style.width]="miniRect().width" [style.height]="miniRect().height"></div></div>
-                }
                 <div class="zoom-status">
                   @if (viewDirty()) {
                     <span>{{ zoom() | number: '1.1-1' }}× · not saved, the detector still uses the saved view</span>
