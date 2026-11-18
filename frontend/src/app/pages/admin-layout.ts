@@ -13,7 +13,6 @@ import { errorMessage } from '../core/api.service';
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" src="bsu-logo.png" alt="Batangas State University logo" />
-          <div class="brand-mark"><svg class="icon"><use href="#i-trash" /></svg></div>
           <div>
             <div class="brand-name">TrashWatch</div>
             <div class="brand-sub">Admin</div>

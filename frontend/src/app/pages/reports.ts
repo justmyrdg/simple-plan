@@ -1,4 +1,4 @@
-﻿import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { DecimalPipe, PercentPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ApiService, Collection, Report, ReportPeriod, errorMessage } from '../core/api.service';
@@ -58,15 +58,15 @@ function isoDay(d: Date) {
           <div>
             <div class="print-school">Batangas State University</div>
             <div class="print-school-sub">The National Engineering University</div>
-            <div class="print-title">TrashWatch Â· Garbage Collection Report</div>
+            <div class="print-title">TrashWatch · Garbage Collection Report</div>
             <div class="print-meta">
-              Period: {{ date(r.since) }} â€“ {{ date(r.until) }} Â·
+              Period: {{ date(r.since) }} – {{ date(r.until) }} ·
               Printed {{ date(now) }} {{ time(now) }}{{ printedBy() ? ' by ' + printedBy() : '' }}
             </div>
           </div>
         </div>
 
-        <p class="muted small no-print">{{ date(r.since) }} â€“ {{ date(r.until) }} Â· {{ r.totals.pickups }} scheduled pickups judged</p>
+        <p class="muted small no-print">{{ date(r.since) }} – {{ date(r.until) }} · {{ r.totals.pickups }} scheduled pickups judged</p>
 
         <section class="kpi-row">
           <div class="kpi-tile" [class.kpi-bad]="(r.totals.collection_rate ?? 1) < 0.8">
@@ -83,7 +83,7 @@ function isoDay(d: Date) {
           </div>
           <div class="kpi-tile">
             <span class="kpi-icon"><svg class="icon"><use href="#i-trash" /></svg></span>
-            <span class="kpi-value">{{ r.totals.avg_hours_full === null ? 'â€“' : (r.totals.avg_hours_full | number: '1.0-1') + ' h' }}</span>
+            <span class="kpi-value">{{ r.totals.avg_hours_full === null ? '–' : (r.totals.avg_hours_full | number: '1.0-1') + ' h' }}</span>
             <span class="kpi-label">Full before pickup (avg)</span>
           </div>
           <div class="kpi-tile">
@@ -93,7 +93,7 @@ function isoDay(d: Date) {
           <div class="kpi-tile" [class.kpi-bad]="r.totals.reminders_failed > 0">
             <span class="kpi-icon"><svg class="icon"><use href="#i-message" /></svg></span>
             <span class="kpi-value">{{ r.totals.reminders_sent }}</span>
-            <span class="kpi-label">Reminders sent{{ r.totals.reminders_failed ? ' Â· ' + r.totals.reminders_failed + ' failed' : '' }}</span>
+            <span class="kpi-label">Reminders sent{{ r.totals.reminders_failed ? ' · ' + r.totals.reminders_failed + ' failed' : '' }}</span>
           </div>
         </section>
 
@@ -121,7 +121,7 @@ function isoDay(d: Date) {
                     <td class="num">{{ pct(a.collection_rate) }}</td>
                     <td class="num">{{ pct(a.on_time_rate) }}</td>
                     <td class="num">{{ minutes(a.avg_minutes_late) }}</td>
-                    <td class="num">{{ a.avg_hours_full === null ? 'â€“' : (a.avg_hours_full | number: '1.0-1') + ' h' }}</td>
+                    <td class="num">{{ a.avg_hours_full === null ? '–' : (a.avg_hours_full | number: '1.0-1') + ' h' }}</td>
                     <td class="num">{{ pct(a.time_full) }}</td>
                     <td class="num">{{ a.times_filled }}</td>
                     <td class="num">{{ a.reminders_sent }}{{ a.reminders_failed ? ' (' + a.reminders_failed + ' failed)' : '' }}</td>
@@ -157,10 +157,10 @@ function isoDay(d: Date) {
                   <td>{{ c.area }}</td>
                   <td>{{ dateTime(c.scheduled_for) }}</td>
                   <td>{{ status[c.status].label }}</td>
-                  <td>{{ c.full_since ? dateTime(c.full_since) : 'â€“' }}</td>
-                  <td>{{ c.collected_at ? dateTime(c.collected_at) : 'â€“' }}</td>
-                  <td>{{ c.collected_at ? timing(c) : 'â€“' }}</td>
-                  <td class="num">{{ c.hours_full === null ? 'â€“' : (c.hours_full | number: '1.0-1') + ' h' }}</td>
+                  <td>{{ c.full_since ? dateTime(c.full_since) : '–' }}</td>
+                  <td>{{ c.collected_at ? dateTime(c.collected_at) : '–' }}</td>
+                  <td>{{ c.collected_at ? timing(c) : '–' }}</td>
+                  <td class="num">{{ c.hours_full === null ? '–' : (c.hours_full | number: '1.0-1') + ' h' }}</td>
                 </tr>
               } @empty {
                 <tr><td colspan="8" class="empty-cell">No scheduled pickups were judged in this period.</td></tr>
@@ -175,7 +175,7 @@ function isoDay(d: Date) {
             <li><strong>Collected</strong>: in the window from 2 hours before to 4 hours after a scheduled pickup, the camera saw the area go from full to clean, and it stayed clean for 3 minutes.</li>
             <li><strong>Missed</strong>: the area was still full when that window ended. Admins get an SMS.</li>
             <li><strong>Nothing to collect</strong>: the area was never full in the window. <strong>No data</strong>: the camera wasn't reporting, so the pickup isn't judged.</li>
-            <li><strong>Collection rate</strong> = collected Ã· (collected + missed). <strong>On time</strong> = clean within 30 minutes after the scheduled time (or earlier).</li>
+            <li><strong>Collection rate</strong> = collected ÷ (collected + missed). <strong>On time</strong> = clean within 30 minutes after the scheduled time (or earlier).</li>
             <li><strong>Full before pickup</strong>: from when the area became full until it turned clean. <strong>Time full</strong>: share of camera-observed time the area looked full.</li>
           </ul>
         </section>
@@ -185,7 +185,7 @@ function isoDay(d: Date) {
           <div><span class="print-line"></span>Noted by</div>
         </div>
       } @else if (!error()) {
-        <div class="loading-block"><span class="spinner spinner-dark"></span> Loading reportâ€¦</div>
+        <div class="loading-block"><span class="spinner spinner-dark"></span> Loading report…</div>
       }
     </div>
   `,
@@ -241,7 +241,7 @@ export class ReportsPage implements OnInit {
 
   protected print() {
     this.now = new Date();
-    // let the "Printed â€¦" time render before the print dialog opens
+    // let the "Printed …" time render before the print dialog opens
     setTimeout(() => window.print());
   }
 
@@ -267,10 +267,10 @@ export class ReportsPage implements OnInit {
 
   private percent = new PercentPipe('en-US');
   protected pct(v: number | null) {
-    return v === null ? 'â€“' : this.percent.transform(v, '1.0-0');
+    return v === null ? '–' : this.percent.transform(v, '1.0-0');
   }
   protected minutes(v: number | null) {
-    if (v === null) return 'â€“';
+    if (v === null) return '–';
     const m = Math.round(v);
     return m < 0 ? `${-m} min early` : `${m} min`;
   }

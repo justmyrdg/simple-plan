@@ -23,7 +23,6 @@ import { errorMessage } from '../core/api.service';
       <form class="auth-card card" (submit)="submit($event)">
         <div class="brand brand-center">
           <img class="brand-logo" src="bsu-logo.png" alt="Batangas State University logo" />
-          <div class="brand-mark"><svg class="icon"><use href="#i-trash" /></svg></div>
           <div>
             <div class="brand-name">TrashWatch</div>
             <div class="brand-sub">Admin login</div>
