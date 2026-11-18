@@ -300,6 +300,43 @@ app-area-map { display: block; }
   .auth-hero p { margin-inline: auto; }
 }
 .brand-center { justify-content: center; margin-bottom: 8px; }
+
+/* ---- reports: date range + printing ---- */
+.date-range { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.date-range .field { flex: 1 1 160px; max-width: 220px; }
+.print-only { display: none !important; }
+@media print {
+  @page { size: A4 landscape; margin: 12mm; }
+  :root { color-scheme: light; }
+  body { background: #fff !important; color: #000; }
+  .sidebar, .mobile-bar, .scrim, .page-head, .no-print, .error { display: none !important; }
+  .print-only { display: revert !important; }
+  .shell { display: block; min-height: 0; }
+  .page { max-width: none; padding: 0; gap: 10px; }
+  .card { box-shadow: none !important; border: 1px solid #999 !important; background: #fff !important; color: #000; }
+  .kpi-row { display: grid !important; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .kpi-tile { box-shadow: none !important; border: 1px solid #999; background: #fff !important; color: #000 !important; padding: 8px; }
+  .kpi-icon { display: none; }
+  .table-wrap { overflow: visible !important; }
+  .table { font-size: 9pt; color: #000; }
+  .table th, .table td { padding: 4px 6px; border-bottom: 1px solid #ccc; }
+  .table thead { display: table-header-group; }
+  .table tr { break-inside: avoid; }
+  .how { break-inside: avoid; font-size: 9pt; }
+  .print-head { display: flex !important; align-items: center; gap: 14px; padding-bottom: 10px; margin-bottom: 4px; border-bottom: 2px solid #000; }
+  .print-head img { width: 70px; height: 70px; object-fit: contain; }
+  .print-school { font-weight: 800; font-size: 13pt; text-transform: uppercase; color: #b31b1b; }
+  .print-school-sub { font-size: 10pt; font-style: italic; }
+  .print-title { margin-top: 4px; font-weight: 800; font-size: 12pt; }
+  .print-meta { font-size: 9pt; }
+  .print-sign { display: flex !important; justify-content: space-around; gap: 40px; margin-top: 40px; font-size: 10pt; text-align: center; break-inside: avoid; }
+  .print-line { display: block; width: 220px; margin-bottom: 4px; border-bottom: 1px solid #000; }
+}
+.school { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+.school-logo { width: 84px; height: 84px; object-fit: contain; flex: none; padding: 4px; border-radius: 50%; background: #fff; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18); }
+.school-name { font-weight: 800; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.02em; }
+.school-sub { font-size: 0.9rem; opacity: 0.9; }
+@media (max-width: 760px) { .school { justify-content: center; text-align: left; } }
 .auth-alt { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.85rem; text-decoration: none; }
 
 /* ---- public ---- */

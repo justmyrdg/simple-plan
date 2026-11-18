@@ -95,6 +95,8 @@ h3 { margin: 0; font-size: 0.95rem; font-weight: 700; }
   border-bottom: 1px solid var(--border);
 }
 .brand { display: flex; align-items: center; gap: 10px; }
+.brand-logo { width: 42px; height: 42px; object-fit: contain; flex: none; padding: 2px; border-radius: 50%; background: #fff; }
+.brand-logo-sm { width: 32px; height: 32px; }
 .brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 14px; background: var(--accent); color: #fff; }
 .brand-name { font-weight: 800; font-size: 1.05rem; letter-spacing: 0.01em; text-transform: uppercase; }
 .brand-sub { color: var(--muted); font-size: 0.8rem; }

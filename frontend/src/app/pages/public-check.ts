@@ -13,6 +13,7 @@ import { fmtAgo, fmtDay, fmtTime, fmtUntil } from '../shared/format';
     <div class="public-top">
       <header class="public-bar">
         <div class="brand">
+          <img class="brand-logo" src="bsu-logo.png" alt="Batangas State University logo" />
           <div class="brand-mark"><svg class="icon"><use href="#i-trash" /></svg></div>
           <div>
             <div class="brand-name">TrashWatch</div>

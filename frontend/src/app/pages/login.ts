@@ -10,11 +10,19 @@ import { errorMessage } from '../core/api.service';
   template: `
     <main class="auth-page">
       <section class="auth-hero">
+        <div class="school">
+          <img class="school-logo" src="bsu-logo.png" alt="Batangas State University logo" />
+          <div>
+            <div class="school-name">Batangas State University</div>
+            <div class="school-sub">The National Engineering University</div>
+          </div>
+        </div>
         <h1>Keep every<br />area clean</h1>
         <p>Cameras watch the collection points. You see what needs pickup.</p>
       </section>
       <form class="auth-card card" (submit)="submit($event)">
         <div class="brand brand-center">
+          <img class="brand-logo" src="bsu-logo.png" alt="Batangas State University logo" />
           <div class="brand-mark"><svg class="icon"><use href="#i-trash" /></svg></div>
           <div>
             <div class="brand-name">TrashWatch</div>

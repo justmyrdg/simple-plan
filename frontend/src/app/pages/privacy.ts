@@ -14,6 +14,7 @@ import { ApiService } from '../core/api.service';
     <div class="public-top">
       <header class="public-bar">
         <a routerLink="/" class="brand brand-link">
+          <img class="brand-logo" src="bsu-logo.png" alt="Batangas State University logo" />
           <div class="brand-mark"><svg class="icon"><use href="#i-trash" /></svg></div>
           <div>
             <div class="brand-name">TrashWatch</div>

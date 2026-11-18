@@ -13,9 +13,9 @@ Per area, over the last N days:
 
 import csv
 import io
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -57,14 +57,27 @@ def _time_full(db: Session, area_id: int, since: datetime, until: datetime) -> t
     return observed, full, filled
 
 
-def build_report(db: Session, days: int) -> dict:
-    until = datetime.now()
-    since = until - timedelta(days=days)
+def period(days: int, start: date | None, end: date | None) -> tuple[datetime, datetime]:
+    """The report window: a start/end date range (whole days, end inclusive) when given, else the last N days."""
+    now = datetime.now()
+    if start is None and end is None:
+        return now - timedelta(days=max(1, min(days, 366))), now
+    if start is None or end is None:
+        raise HTTPException(422, "Give both a start and an end date.")
+    if end < start:
+        raise HTTPException(422, "The end date is before the start date.")
+    if (end - start).days > 366:
+        raise HTTPException(422, "Pick a range of at most one year.")
+    return datetime.combine(start, time.min), min(datetime.combine(end, time.max), now)
+
+
+def build_report(db: Session, since: datetime, until: datetime) -> dict:
+    days = max(1, round((until - since).total_seconds() / 86400))
     collections = [c for c in list_collections(db, since, until) if c["status"] != "pending"]
     areas = db.scalars(select(Area).order_by(Area.name)).all()
     sms = db.execute(
         select(SmsLog.area_id, SmsLog.status, func.count()).where(
-            SmsLog.kind.in_(("reminder", "at_pickup")), SmsLog.created_at >= since
+            SmsLog.kind.in_(("reminder", "at_pickup")), SmsLog.created_at >= since, SmsLog.created_at <= until
         ).group_by(SmsLog.area_id, SmsLog.status)
     ).all()
 
@@ -98,20 +111,21 @@ def build_report(db: Session, days: int) -> dict:
         "days": days, "since": since, "until": until,
         "totals": summarize(collections, totals["observed"], totals["full"], totals["filled"], totals["sent"], totals["failed"]),
         "areas": rows,
-        "collections": collections[:200],
+        "collections": collections[:1000],
     }
 
 
 @router.get("/summary")
-def report_summary(days: int = 30, db: Session = Depends(get_db)):
-    return build_report(db, max(1, min(days, 366)))
+def report_summary(days: int = 30, start: date | None = None, end: date | None = None, db: Session = Depends(get_db)):
+    return build_report(db, *period(days, start, end))
 
 
 @router.get("/collections.csv")
-def report_csv(days: int = 30, db: Session = Depends(get_db)):
+def report_csv(days: int = 30, start: date | None = None, end: date | None = None, db: Session = Depends(get_db)):
     """Every judged pickup in the period, one row each, for spreadsheets."""
-    days = max(1, min(days, 366))
-    data = [c for c in list_collections(db, datetime.now() - timedelta(days=days)) if c["status"] != "pending"]
+    since, until = period(days, start, end)
+    data = [c for c in list_collections(db, since, until) if c["status"] != "pending"]
+    name = f"{since:%Y-%m-%d}_to_{until:%Y-%m-%d}" if start else f"{days}d"
     out = io.StringIO()
     w = csv.writer(out)
     w.writerow(["area", "scheduled_for", "status", "full_since", "collected_at", "minutes_from_schedule", "on_time", "hours_full"])
@@ -120,4 +134,4 @@ def report_csv(days: int = 30, db: Session = Depends(get_db)):
                     "" if c["minutes_from_schedule"] is None else c["minutes_from_schedule"],
                     c["on_time"] if c["status"] == "collected" else "", "" if c["hours_full"] is None else c["hours_full"]])
     return Response(out.getvalue(), media_type="text/csv",
-                    headers={"Content-Disposition": f'attachment; filename="trashwatch-collections-{days}d.csv"'})
+                    headers={"Content-Disposition": f'attachment; filename="trashwatch-collections-{name}.csv"'})

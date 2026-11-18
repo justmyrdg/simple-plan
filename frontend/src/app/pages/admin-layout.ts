@@ -12,6 +12,7 @@ import { errorMessage } from '../core/api.service';
     <div class="shell" [class.nav-open]="navOpen()">
       <aside class="sidebar">
         <div class="brand">
+          <img class="brand-logo" src="bsu-logo.png" alt="Batangas State University logo" />
           <div class="brand-mark"><svg class="icon"><use href="#i-trash" /></svg></div>
           <div>
             <div class="brand-name">TrashWatch</div>
@@ -50,6 +51,7 @@ import { errorMessage } from '../core/api.service';
       <div class="content">
         <header class="mobile-bar">
           <button class="icon-btn" (click)="navOpen.set(true)" aria-label="Open menu"><svg class="icon"><use href="#i-menu" /></svg></button>
+          <img class="brand-logo brand-logo-sm" src="bsu-logo.png" alt="Batangas State University logo" />
           <span class="brand-name">TrashWatch</span>
         </header>
         <router-outlet />

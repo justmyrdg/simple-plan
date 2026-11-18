@@ -109,6 +109,7 @@ export interface ReportStats {
   reminders_sent: number;
   reminders_failed: number;
 }
+export type ReportPeriod = { days: number } | { start: string; end: string };
 export interface Report {
   days: number;
   since: string;
@@ -226,8 +227,9 @@ export class ApiService {
   collections(areaId?: number, days = 30) {
     return this.http.get<Collection[]>('/api/collections', { params: areaId ? { area_id: areaId, days } : { days } });
   }
-  report(days: number) { return this.http.get<Report>('/api/reports/summary', { params: { days } }); }
-  reportCsv(days: number) { return this.http.get('/api/reports/collections.csv', { params: { days }, responseType: 'blob' }); }
+  /** `{ days }` for the last N days, or `{ start, end }` (YYYY-MM-DD, end inclusive) for a date range. */
+  report(period: ReportPeriod) { return this.http.get<Report>('/api/reports/summary', { params: { ...period } }); }
+  reportCsv(period: ReportPeriod) { return this.http.get('/api/reports/collections.csv', { params: { ...period }, responseType: 'blob' }); }
 
   deletePhoto(detectionId: number) { return this.http.delete(`/api/detections/${detectionId}/photo`); }
 
