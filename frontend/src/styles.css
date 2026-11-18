@@ -27,6 +27,15 @@
   --tile-2: #d9f3e2; --tile-2-ink: #1b7a47;
   --tile-3: #dfe7fb; --tile-3-ink: #3655b3;
   --tile-4: #fbf0cb; --tile-4-ink: #87650d;
+  /* charts (Reports): pickup results + one data series; checked with the dataviz palette validator */
+  --viz-collected: #0ca30c;
+  --viz-missed: #d03b3b;
+  --viz-missed-ink: #8f2020; /* hatch lines on "not collected" (red/green alone fails for deutan) */
+  --viz-nowaste: #94a39b;
+  --viz-nodata: #cfd8d3;
+  --viz-series: #2a78d6;
+  --viz-grid: #e3ebe7;
+  --viz-axis: #c3cfc9;
   --shadow: 0 6px 22px rgba(24, 110, 70, 0.08);
   --radius: 20px;
   --font: "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -59,6 +68,12 @@
     --tile-2: #143222; --tile-2-ink: #82dba6;
     --tile-3: #1a2440; --tile-3-ink: #a3b9f5;
     --tile-4: #332b12; --tile-4-ink: #e8cf7d;
+    --viz-missed-ink: #ff9a9a;
+    --viz-nowaste: #6b8177;
+    --viz-nodata: #34483d;
+    --viz-series: #3987e5;
+    --viz-grid: #1f3328;
+    --viz-axis: #2f463a;
     --shadow: none;
     color-scheme: dark;
   }

@@ -5,6 +5,7 @@ import { ApiService, Collection, Report, ReportPeriod, errorMessage } from '../c
 import { AuthService } from '../core/auth.service';
 import { COLLECTION_STATUS, CollectionList } from '../shared/collection-list';
 import { fmtDate, fmtTime } from '../shared/format';
+import { ReportCharts } from '../shared/report-charts';
 
 /** YYYY-MM-DD in local time (what `<input type="date">` and the API expect). */
 function isoDay(d: Date) {
@@ -15,7 +16,7 @@ function isoDay(d: Date) {
 /** Collection performance over a period: the numbers that show whether waste management is improving. */
 @Component({
   selector: 'app-reports',
-  imports: [DecimalPipe, CollectionList],
+  imports: [DecimalPipe, CollectionList, ReportCharts],
   template: `
     <header class="page-head">
       <div>
@@ -96,6 +97,8 @@ function isoDay(d: Date) {
             <span class="kpi-label">Reminders sent{{ r.totals.reminders_failed ? ' · ' + r.totals.reminders_failed + ' failed' : '' }}</span>
           </div>
         </section>
+
+        <app-report-charts [report]="r" />
 
         <section class="card card-flush">
           <div class="card-head"><h3>By area</h3></div>
